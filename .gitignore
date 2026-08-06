@@ -1,0 +1,126 @@
+# ==============================================================================
+# Compliance Management System — monorepo .gitignore (backend: Python/FastAPI,
+# frontend: Node/Vite/React)
+# ==============================================================================
+
+# ─── Secrets & Environment ───
+# Never commit real environment files. Keep the .example templates tracked.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.crt
+*.p12
+secrets.*
+
+# ─── Logs ───
+logs/
+*.log
+backend/logs/
+
+# ==============================================================================
+# Python / Backend
+# ==============================================================================
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+
+# Byte-compiled / optimized / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.manifest
+*.spec
+
+# Test / coverage / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.cache/
+.hypothesis/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ==============================================================================
+# Node / Frontend
+# ==============================================================================
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+.pnp/
+.pnp.js
+.yarn/cache/
+.yarn/unplugged/
+
+# Build output
+frontend/dist/
+frontend/build/
+dist-ssr/
+*.local
+
+# Vite / bundler caches
+.vite/
+frontend/.vite/
+
+# Test / coverage
+frontend/coverage/
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
+
+# Package manager debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==============================================================================
+# Editors / IDEs
+# ==============================================================================
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# ==============================================================================
+# Operating System
+# ==============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
