@@ -21,25 +21,24 @@ interface PrivateRouteProps {
 
 export const PrivateRoute = ({ children, menuKey }: PrivateRouteProps) => {
   const { isAuthenticated, isBootstrapping } = useAppSelector((state) => state.auth);
-  const { menuKeys, isLoaded: rbacLoaded } = useAppSelector((state) => state.rbac);
+  const { menuKeys, isLoaded: rbacLoaded, isLoading: rbacLoading } = useAppSelector((state) => state.rbac);
   const location = useLocation();
 
-  // While the session is being restored from the refresh cookie, don't decide
-  // yet — avoids a premature bounce to /login on reload.
+  // While the session is being restored from the refresh cookie, don't decide yet.
   if (isBootstrapping) {
     return null;
   }
 
   if (!isAuthenticated) {
-    // Save intended destination
     sessionStorage.setItem('redirectAfterLogin', location.pathname);
     return <Navigate to="/login" replace />;
   }
 
-  // If menu key(s) are specified, check RBAC permissions
+  // If menu key(s) are specified, wait until RBAC has finished loading
+  // before making an access decision — prevents a flash-redirect to /unauthorized
+  // while permissions are still being fetched after login.
   if (menuKey) {
-    if (!rbacLoaded) {
-      // Still loading permissions — show nothing briefly
+    if (!rbacLoaded || rbacLoading) {
       return null;
     }
     const required = Array.isArray(menuKey) ? menuKey : [menuKey];

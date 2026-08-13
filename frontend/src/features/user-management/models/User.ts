@@ -1,7 +1,7 @@
-/** User domain types matching backend UserResponse */
+/** User domain types matching backend UserResponse. ids are numbers (BigInt). */
 
 export interface User {
-  id: string;
+  id: number;
   username: string;
   is_active: boolean;
   is_blocked: boolean;
@@ -27,14 +27,16 @@ export interface CreateUserRequest {
   username: string;
   password: string;
   is_validate_ad: boolean;
-  role_id: string | null;
+  role_id: number | null;
 }
 
 export interface UpdateUserRequest {
   is_active?: boolean;
   is_blocked?: boolean;
   is_validate_ad?: boolean;
-  role_id?: string | null;
+  role_id?: number | null;
+  email?: string | null;
+  password?: string | null;
 }
 
 export interface RolePermission {
@@ -46,14 +48,14 @@ export interface RolePermission {
 }
 
 export interface UserRole {
-  id: string;
+  id: number;
   code: string;
   name: string;
   permissions: RolePermission[];
 }
 
 export interface UserRolesResponse {
-  user_id: string;
+  user_id: number;
   roles: UserRole[];
 }
 

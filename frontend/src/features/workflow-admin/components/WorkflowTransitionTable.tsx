@@ -66,7 +66,8 @@ export const WorkflowTransitionTable = ({
       <Button
         icon="pi pi-trash"
         rounded
-        outlined
+        text
+        raised
         severity="danger"
         size="small"
         onClick={() => onDelete(row)}
@@ -81,7 +82,6 @@ export const WorkflowTransitionTable = ({
       value={transitions}
       loading={loading}
       stripedRows
-      showGridlines
       size="small"
       emptyMessage="No transitions defined. Wire an action between two states."
       aria-label="Workflow transitions table"

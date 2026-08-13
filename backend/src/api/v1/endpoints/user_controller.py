@@ -156,6 +156,8 @@ async def update_user(
             is_blocked=request.is_blocked,
             is_validate_ad=request.is_validate_ad,
             role_id=request.role_id,
+            email=request.email,
+            password=request.password,
         )
         result = await service.update_user(user_id=user_id, dto=dto, actor=current_user)
         return UserResponse(

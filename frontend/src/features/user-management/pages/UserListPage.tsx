@@ -55,7 +55,7 @@ export const UserListPage = () => {
     setShowEditDialog(true);
   };
 
-  const handleUpdateUser = async (userId: string, formData: UpdateUserRequest) => {
+  const handleUpdateUser = async (userId: number, formData: UpdateUserRequest) => {
     try {
       await updateUserMutation.mutateAsync({ userId, request: formData });
       setShowEditDialog(false);

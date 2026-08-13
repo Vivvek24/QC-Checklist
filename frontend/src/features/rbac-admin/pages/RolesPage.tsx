@@ -23,6 +23,8 @@ import type { CreateRoleRequest, Permission, Role } from '../models/rbac-admin.t
 /**
  * Build a tree structure from flat permissions, grouped by feature (resource).
  * Structure: Scope → Resource → Permission
+ * Note: Tree node keys are strings (PrimeReact requirement). Permission ids are
+ * numbers — we store them as strings in keys and convert back when calling the API.
  */
 function buildPermissionTree(permissions: Permission[]): TreeNode[] {
   // Group by scope first, then by resource
@@ -69,7 +71,7 @@ function buildPermissionTree(permissions: Permission[]): TreeNode[] {
         // Single permission under resource — add directly to scope
         const perm = perms[0]!;
         scopeNode.children!.push({
-          key: perm.id,
+          key: String(perm.id),
           label: `${perm.name}`,
           data: perm,
           icon: 'pi pi-key',
@@ -81,7 +83,7 @@ function buildPermissionTree(permissions: Permission[]): TreeNode[] {
           label: resource.charAt(0).toUpperCase() + resource.slice(1),
           icon: 'pi pi-folder',
           children: perms.map((perm) => ({
-            key: perm.id,
+            key: String(perm.id),
             label: `${perm.name} (${perm.action})`,
             data: perm,
             icon: 'pi pi-key',
@@ -103,7 +105,7 @@ function buildPermissionTree(permissions: Permission[]): TreeNode[] {
  * Also marks parent nodes as checked/partial based on children.
  */
 function buildSelectionKeys(
-  selectedIds: Set<string>,
+  selectedIds: Set<number>,
   tree: TreeNode[]
 ): TreeCheckboxSelectionKeys {
   const keys: TreeCheckboxSelectionKeys = {};
@@ -119,7 +121,7 @@ function buildSelectionKeys(
         let anyResourceSelected = false;
 
         for (const leaf of child.children) {
-          if (selectedIds.has(leaf.key as string)) {
+          if (selectedIds.has(Number(leaf.key))) {
             keys[leaf.key as string] = { checked: true, partialChecked: false };
             anyResourceSelected = true;
           } else {
@@ -139,7 +141,7 @@ function buildSelectionKeys(
         }
       } else {
         // Direct leaf under scope
-        if (selectedIds.has(child.key as string)) {
+        if (selectedIds.has(Number(child.key))) {
           keys[child.key as string] = { checked: true, partialChecked: false };
           anyScopeSelected = true;
         } else {
@@ -160,17 +162,18 @@ function buildSelectionKeys(
 
 /**
  * Extract actual permission IDs (leaf nodes) from TreeCheckboxSelectionKeys.
+ * Returns numeric IDs for API calls.
  */
 function extractPermissionIds(
   selectionKeys: TreeCheckboxSelectionKeys,
   permissions: Permission[]
-): string[] {
-  const permIdSet = new Set(permissions.map((p) => p.id));
-  const selected: string[] = [];
+): number[] {
+  const permIdSet = new Set(permissions.map((p) => String(p.id)));
+  const selected: number[] = [];
 
   for (const [key, value] of Object.entries(selectionKeys)) {
     if (permIdSet.has(key) && (value as any).checked) {
-      selected.push(key);
+      selected.push(Number(key));
     }
   }
 
@@ -185,6 +188,7 @@ export const RolesPage = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionTree, setPermissionTree] = useState<TreeNode[]>([]);
   const [selectionKeys, setSelectionKeys] = useState<TreeCheckboxSelectionKeys>({});
   const [createForm, setCreateForm] = useState<CreateRoleRequest>({
@@ -254,9 +258,7 @@ export const RolesPage = () => {
     const newPermIds = new Set(extractPermissionIds(selectionKeys, permissions));
     const currentPermIds = new Set(selectedRole.permissions.map((p) => p.id));
 
-    // Permissions to grant (in new but not in current)
     const toGrant = [...newPermIds].filter((id) => !currentPermIds.has(id));
-    // Permissions to revoke (in current but not in new)
     const toRevoke = [...currentPermIds].filter((id) => !newPermIds.has(id));
 
     if (toGrant.length === 0 && toRevoke.length === 0) {
@@ -264,6 +266,7 @@ export const RolesPage = () => {
       return;
     }
 
+    setSavingPermissions(true);
     try {
       for (const permId of toGrant) {
         await rbacAdminApi.grantPermission({
@@ -292,6 +295,8 @@ export const RolesPage = () => {
         detail: error.response?.data?.detail || 'Failed to update permissions',
         life: 5000,
       });
+    } finally {
+      setSavingPermissions(false);
     }
   };
 
@@ -320,7 +325,8 @@ export const RolesPage = () => {
       <Button
         icon="pi pi-shield"
         rounded
-        outlined
+        text
+        raised
         severity="info"
         size="small"
         tooltip="Manage Permissions"
@@ -461,11 +467,13 @@ export const RolesPage = () => {
                 icon="pi pi-times"
                 severity="secondary"
                 text
+                disabled={savingPermissions}
                 onClick={() => setShowPermissionsDialog(false)}
               />
               <Button
                 label="Save Changes"
                 icon="pi pi-check"
+                loading={savingPermissions}
                 onClick={handleSavePermissions}
               />
             </div>

@@ -1,6 +1,5 @@
 /**
  * Application router.
- * Defines all routes with authentication and RBAC guards.
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -15,14 +14,7 @@ import {
   WorkflowBuilderPage,
   ApprovalMatrixPage,
 } from '@features/workflow-admin';
-import {
-  CountriesPage,
-  StatesPage,
-  CategoriesOfLawPage,
-  LegislationsPage,
-  RulesPage,
-  TaskTypesPage,
-} from '@features/masters';
+import { BusinessUnitPage, UnitPage, FormatPage, StagePage, QuestionPage, ProductPage, ValidationTypePage, RemarkPage, SapFieldPage, ApprovalLabelPage, FormatStagesPage, FormatsViewPage, StageQuestionViewPage } from '@features/masters';
 import { MainLayout } from '@app/layouts/MainLayout';
 import { PrivateRoute } from './PrivateRoute';
 import { AuthBootstrap } from './AuthBootstrap';
@@ -32,164 +24,212 @@ export const AppRouter = () => {
   return (
     <BrowserRouter>
       <AuthBootstrap>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/auth/microsoft/callback" element={<MicrosoftCallbackPage />} />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/microsoft/callback" element={<MicrosoftCallbackPage />} />
 
-        {/* Protected routes with layout */}
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <MainLayout />
-            </PrivateRoute>
-          }
-        >
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          {/* Protected routes with layout */}
           <Route
-            path="dashboard"
-            element={<div className="p-4"><h2>Dashboard</h2><p>Welcome to QC-Checklist</p></div>}
-          />
-          <Route
-            path="users"
+            path="/"
             element={
-              <PrivateRoute menuKey="users">
-                <UserListPage />
+              <PrivateRoute>
+                <MainLayout />
               </PrivateRoute>
             }
-          />
-          <Route
-            path="roles"
-            element={
-              <PrivateRoute menuKey="roles">
-                <RolesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="audit-logs"
-            element={
-              <PrivateRoute menuKey="audit_logs">
-                <AuditLogsPage />
-              </PrivateRoute>
-            }
-          />
-          {/*
-            Master data. All six share the `masters` menu key, matching the single
-            MENU-scope permission the backend seeds; the per-master API permissions
-            still gate the writes.
-          */}
-          <Route
-            path="masters/countries"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.countries']}>
-                <CountriesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/states"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.states']}>
-                <StatesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/categories-of-law"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.categories_of_law']}>
-                <CategoriesOfLawPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/legislations"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.legislations']}>
-                <LegislationsPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/rules"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.rules']}>
-                <RulesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/task-types"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.task_types']}>
-                <TaskTypesPage />
-              </PrivateRoute>
-            }
-          />
+          >
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route
+              path="dashboard"
+              element={<div className="p-4"><h2>Dashboard</h2><p>Welcome to QC-Checklist</p></div>}
+            />
+            <Route
+              path="users"
+              element={
+                <PrivateRoute menuKey="users">
+                  <UserListPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="roles"
+              element={
+                <PrivateRoute menuKey="roles">
+                  <RolesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="audit-logs"
+              element={
+                <PrivateRoute menuKey="audit_logs">
+                  <AuditLogsPage />
+                </PrivateRoute>
+              }
+            />
 
-          {/*
-            The builder is nested under the list path so the breadcrumb reads as a
-            drill-down. The literal "workflows" index route is declared first, so
-            it is never shadowed by the :definitionId segment.
-          */}
-          <Route
-            path="workflows"
-            element={
-              <PrivateRoute menuKey="workflows">
-                <WorkflowDefinitionsPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="workflows/:definitionId"
-            element={
-              <PrivateRoute menuKey="workflows">
-                <WorkflowBuilderPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="approval-matrix"
-            element={
-              <PrivateRoute menuKey="workflows">
-                <ApprovalMatrixPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="services/employee-ad"
-            element={
-              <PrivateRoute menuKey="services">
-                <EmployeeADServicePage />
-              </PrivateRoute>
-            }
-          />
-          {/* 404 for any other path while authenticated — stays inside the app shell */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
+            {/* ─── Masters ─── */}
+            <Route
+              path="masters/business-units"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.business_units']}>
+                  <BusinessUnitPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/units"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.units']}>
+                  <UnitPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/formats"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.formats']}>
+                  <FormatPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/stages"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.stages']}>
+                  <StagePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/questions"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.questions']}>
+                  <QuestionPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/products"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.products']}>
+                  <ProductPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/validation-types"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.validation_types']}>
+                  <ValidationTypePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/remarks"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.remarks']}>
+                  <RemarkPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/sap-fields"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.sap_fields']}>
+                  <SapFieldPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/approval-labels"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.approval_labels']}>
+                  <ApprovalLabelPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/stage-question-mapping/:formatId/stages"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.stage_question_mapping']}>
+                  <FormatStagesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/formats-view"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.formats_view']}>
+                  <FormatsViewPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/formats-view/:formatId/stages"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.formats_view']}>
+                  <FormatStagesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/formats-view/:formatId/questions"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.formats_view']}>
+                  <StageQuestionViewPage />
+                </PrivateRoute>
+              }
+            />
 
-        {/* Unauthorized */}
-        <Route
-          path="/unauthorized"
-          element={
-            <div className="flex align-items-center justify-content-center min-h-screen">
-              <div className="text-center">
-                <h1 className="text-4xl text-red-500">403</h1>
-                <p className="text-600">You don't have permission to access this page.</p>
+            {/* ─── Workflow engine ─── */}
+            <Route
+              path="workflows"
+              element={
+                <PrivateRoute menuKey="workflows">
+                  <WorkflowDefinitionsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="workflows/:definitionId"
+              element={
+                <PrivateRoute menuKey="workflows">
+                  <WorkflowBuilderPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="approval-matrix"
+              element={
+                <PrivateRoute menuKey="workflows">
+                  <ApprovalMatrixPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/employee-ad"
+              element={
+                <PrivateRoute menuKey="services">
+                  <EmployeeADServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+
+          <Route
+            path="/unauthorized"
+            element={
+              <div className="flex align-items-center justify-content-center min-h-screen">
+                <div className="text-center">
+                  <h1 className="text-4xl text-red-500">403</h1>
+                  <p className="text-600">You don't have permission to access this page.</p>
+                </div>
               </div>
-            </div>
-          }
-        />
-
-        {/*
-          No top-level catch-all: unknown paths fall through to the protected
-          "/" route, which shows the in-app 404 when authenticated or redirects
-          to /login (via PrivateRoute) when not. This prevents unknown URLs from
-          logging authenticated users out.
-        */}
-      </Routes>
+            }
+          />
+        </Routes>
       </AuthBootstrap>
     </BrowserRouter>
   );

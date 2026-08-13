@@ -13,7 +13,7 @@
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authApi } from '../api/authApi';
-import { fetchMenuPermissions, clearRbac } from '@core/rbac';
+import { fetchMenuPermissions, fetchApiPermissions, clearRbac } from '@core/rbac';
 import { sessionBus } from '@shared/services/sessionBus';
 import { sessionCache } from '@shared/services/sessionCache';
 import type { AuthState, CurrentUser, LoginRequest } from '../models/auth.types';
@@ -36,13 +36,11 @@ export const loginThunk = createAsyncThunk(
   async (credentials: LoginRequest, { dispatch, rejectWithValue }) => {
     try {
       await authApi.login(credentials);
-      // Fetch profile and RBAC permissions in parallel (both need the token that
-      // login just placed in memory).
       const [user] = await Promise.all([
         authApi.getCurrentUser(),
         dispatch(fetchMenuPermissions()),
+        dispatch(fetchApiPermissions()),
       ]);
-      // Tell other tabs to converge on this (possibly new) identity.
       sessionBus.broadcastLogin();
       return user;
     } catch (error: any) {
@@ -60,6 +58,7 @@ export const fetchCurrentUser = createAsyncThunk(
       const [user] = await Promise.all([
         authApi.getCurrentUser(),
         dispatch(fetchMenuPermissions()),
+        dispatch(fetchApiPermissions()),
       ]);
       sessionBus.broadcastLogin();
       return user;
@@ -77,11 +76,12 @@ export const bootstrapSession = createAsyncThunk(
   'auth/bootstrap',
   async (_, { dispatch, rejectWithValue }) => {
     try {
-      await authApi.refresh(); // sets access token in memory (throws if no valid cookie)
-      // Profile + permissions in parallel once the token is in memory.
+      await authApi.refresh();
+      // Fetch fresh permissions after token refresh
       const [user] = await Promise.all([
         authApi.getCurrentUser(),
         dispatch(fetchMenuPermissions()),
+        dispatch(fetchApiPermissions()),
       ]);
       return user;
     } catch {

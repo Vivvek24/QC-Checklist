@@ -41,8 +41,9 @@ export const WorkflowStatusTable = ({
         <Button
           icon="pi pi-pencil"
           rounded
-          outlined
-          severity="info"
+          text
+          raised
+          severity="success"
           size="small"
           onClick={() => onEdit(row)}
           tooltip="Edit"
@@ -54,7 +55,8 @@ export const WorkflowStatusTable = ({
         <Button
           icon="pi pi-trash"
           rounded
-          outlined
+          text
+          raised
           severity="danger"
           size="small"
           onClick={() => onDelete(row)}
@@ -71,7 +73,6 @@ export const WorkflowStatusTable = ({
       value={statuses}
       loading={loading}
       stripedRows
-      showGridlines
       size="small"
       emptyMessage="No states defined. Add an initial state to begin."
       aria-label="Workflow states table"

@@ -143,10 +143,10 @@ export const UserTable = ({ users, loading, onEdit }: UserTableProps) => {
 
   const actionsBodyTemplate = (rowData: User) => (
     <div className="flex gap-1">
-      <Button icon="pi pi-id-card" rounded outlined severity="secondary" size="small" onClick={() => handleViewDetails(rowData)} tooltip="Details" tooltipOptions={{ position: 'top' }} />
-      <Button icon="pi pi-history" rounded outlined severity="help" size="small" onClick={() => handleViewHistory(rowData)} tooltip="Login History" tooltipOptions={{ position: 'top' }} />
-      <Button icon="pi pi-shield" rounded outlined severity="warning" size="small" onClick={() => handleViewRoles(rowData)} tooltip="Roles" tooltipOptions={{ position: 'top' }} />
-      <Button icon="pi pi-pencil" rounded outlined severity="info" size="small" onClick={() => onEdit(rowData)} tooltip="Edit" tooltipOptions={{ position: 'top' }} />
+      <Button icon="pi pi-id-card" rounded text raised severity="secondary" size="small" onClick={() => handleViewDetails(rowData)} tooltip="Details" tooltipOptions={{ position: 'top' }} />
+      <Button icon="pi pi-history" rounded text raised severity="help" size="small" onClick={() => handleViewHistory(rowData)} tooltip="Login History" tooltipOptions={{ position: 'top' }} />
+      <Button icon="pi pi-shield" rounded text raised severity="warning" size="small" onClick={() => handleViewRoles(rowData)} tooltip="Roles" tooltipOptions={{ position: 'top' }} />
+      <Button icon="pi pi-pencil" rounded text raised severity="success" size="small" onClick={() => onEdit(rowData)} tooltip="Edit" tooltipOptions={{ position: 'top' }} />
     </div>
   );
 
@@ -159,7 +159,6 @@ export const UserTable = ({ users, loading, onEdit }: UserTableProps) => {
         rows={10}
         rowsPerPageOptions={[5, 10, 25, 50]}
         stripedRows
-        showGridlines
         emptyMessage="No users found."
         filters={filters}
         filterDisplay="row"

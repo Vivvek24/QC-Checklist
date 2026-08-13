@@ -118,7 +118,7 @@ class UserService:
     async def update_user(
         self, user_id: int, dto: UpdateUserDTO, actor: User
     ) -> UserDTO:
-        """Update user properties and optionally reassign role."""
+        """Update user properties, optionally reassign role and update email."""
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise ValueError("User not found")
@@ -129,6 +129,8 @@ class UserService:
             user.is_blocked = dto.is_blocked
         if dto.is_validate_ad is not None:
             user.is_validate_ad = dto.is_validate_ad
+        if dto.password is not None and dto.password.strip():
+            user.password_hash = self._hasher.hash(dto.password)
 
         user.mark_modified(actor.username)
         updated = await self._users.update(user)
@@ -137,6 +139,10 @@ class UserService:
         if dto.role_id is not None:
             await self._assignments.deactivate_all_for_user(user_id, actor.username)
             await self._assign_role(user_id, dto.role_id, actor.username)
+
+        # Update email in user_details if supplied
+        if dto.email is not None:
+            await self._details.upsert_email(user_id, dto.email.strip(), actor.username)
 
         return self._to_dto(updated)
 
@@ -194,15 +200,15 @@ class UserService:
         """Get all active roles and their permissions assigned to a user."""
         assignments = await self._assignments.list_active_for_user(user_id)
         if not assignments:
-            return {"user_id": str(user_id), "roles": []}
+            return {"user_id": user_id, "roles": []}
 
         roles = await self._roles.list_by_ids([a.role_id for a in assignments])
 
         return {
-            "user_id": str(user_id),
+            "user_id": user_id,
             "roles": [
                 {
-                    "id": str(role.id),
+                    "id": role.id,
                     "code": role.code,
                     "name": role.name,
                     "permissions": [

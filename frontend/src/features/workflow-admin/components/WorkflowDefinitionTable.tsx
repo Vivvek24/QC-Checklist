@@ -52,7 +52,8 @@ export const WorkflowDefinitionTable = ({
       <Button
         icon="pi pi-sitemap"
         rounded
-        outlined
+        text
+        raised
         severity="secondary"
         size="small"
         onClick={() => onConfigure(row)}
@@ -64,8 +65,9 @@ export const WorkflowDefinitionTable = ({
         <Button
           icon="pi pi-pencil"
           rounded
-          outlined
-          severity="info"
+          text
+          raised
+          severity="success"
           size="small"
           onClick={() => onEdit(row)}
           tooltip="Edit"
@@ -77,7 +79,8 @@ export const WorkflowDefinitionTable = ({
         <Button
           icon="pi pi-trash"
           rounded
-          outlined
+          text
+          raised
           severity="danger"
           size="small"
           onClick={() => onDelete(row)}
@@ -97,7 +100,6 @@ export const WorkflowDefinitionTable = ({
       rows={10}
       rowsPerPageOptions={[5, 10, 25, 50]}
       stripedRows
-      showGridlines
       emptyMessage="No workflows defined yet."
       filters={filters}
       filterDisplay="row"

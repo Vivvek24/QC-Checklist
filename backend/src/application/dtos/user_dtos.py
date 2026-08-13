@@ -18,6 +18,8 @@ class UpdateUserDTO:
     is_blocked: bool | None = None
     is_validate_ad: bool | None = None
     role_id: int | None = None
+    email: str | None = None
+    password: str | None = None
 
 
 @dataclass(frozen=True)

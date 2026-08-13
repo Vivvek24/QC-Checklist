@@ -125,7 +125,6 @@ export const MasterCrudPage = <TEntity extends MasterRecord>({
         rows={10}
         rowsPerPageOptions={[10, 25, 50, 100]}
         stripedRows
-        showGridlines
         emptyMessage={emptyMessage}
         filters={filters}
         filterDisplay={filters ? 'row' : undefined}

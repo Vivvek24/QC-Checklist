@@ -20,6 +20,21 @@ from src.infrastructure.database.models.approval_matrix_model import (  # noqa: 
 )
 from src.infrastructure.database.models.audit_log_model import AuditLogModel  # noqa: F401
 from src.infrastructure.database.models.base_model import Base
+from src.infrastructure.database.models.masters.business_unit_model import BusinessUnitModel  # noqa: F401
+from src.infrastructure.database.models.masters.approval_label_model import ApprovalLabelModel, ApprovalLabelUserRoleModel  # noqa: F401
+from src.infrastructure.database.models.masters.format_model import FormatModel  # noqa: F401
+from src.infrastructure.database.models.masters.format_stage_mapping_model import FormatStageMappingModel  # noqa: F401
+from src.infrastructure.database.models.masters.product_model import ProductModel  # noqa: F401
+from src.infrastructure.database.models.masters.test_master_model import TestMasterModel  # noqa: F401
+from src.infrastructure.database.models.masters.question_model import QuestionModel  # noqa: F401
+from src.infrastructure.database.models.masters.question_option_model import QuestionOptionModel  # noqa: F401
+from src.infrastructure.database.models.masters.remark_model import RemarkModel  # noqa: F401
+from src.infrastructure.database.models.masters.sap_field_model import SapFieldModel  # noqa: F401
+from src.infrastructure.database.models.masters.stage_model import StageModel  # noqa: F401
+from src.infrastructure.database.models.masters.stage_question_mapping_model import StageQuestionMappingModel  # noqa: F401
+from src.infrastructure.database.models.masters.section_model import SectionModel  # noqa: F401
+from src.infrastructure.database.models.masters.unit_model import UnitModel  # noqa: F401
+from src.infrastructure.database.models.masters.validation_type_model import ValidationTypeModel  # noqa: F401
 from src.infrastructure.database.models.role_model import (  # noqa: F401
     PermissionModel,
     RoleAssignmentModel,

@@ -52,3 +52,5 @@ frontend/
     │   └── icons/
     └── i18n/                    # Internationalization
         └── locales/
+
+python -m uvicorn src.main:app --reload --port 6769

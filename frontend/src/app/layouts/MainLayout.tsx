@@ -1,16 +1,14 @@
 /**
- * Main application layout — Sakai-style with QC-Checklist branding.
- * Collapsible sidebar, topbar with profile menu, breadcrumbs.
+ * Main application layout — collapsible sidebar sections with QC-Checklist branding.
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { Avatar } from 'primereact/avatar';
 import { Menu } from 'primereact/menu';
 import { Badge } from 'primereact/badge';
 import { Tooltip } from 'primereact/tooltip';
-import { useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '@app/store';
 import { logoutThunk } from '@features/authentication/store/authSlice';
 import { useApiPermissions, useMenuPermissions } from '@core/rbac/usePermissions';
@@ -19,14 +17,22 @@ interface NavItem {
   label: string;
   icon: string;
   path: string;
-  visible?: boolean;
   section?: string;
-  /**
-   * Menu key(s) required to show the item. An array means all are required, so a
-   * master screen asks for both the section key and its own.
-   */
   menuKey?: string | string[];
 }
+
+interface SectionDef {
+  key: string;
+  label: string;
+  icon: string;
+}
+
+const SECTIONS: SectionDef[] = [
+  { key: 'Management', label: 'Admin Settings', icon: 'pi pi-cog' },
+  { key: 'Masters', label: 'Masters', icon: 'pi pi-database' },
+  { key: 'Workflow', label: 'Workflow', icon: 'pi pi-share-alt' },
+  { key: 'Services', label: 'Services', icon: 'pi pi-cloud' },
+];
 
 export const MainLayout = () => {
   const dispatch = useAppDispatch();
@@ -35,58 +41,46 @@ export const MainLayout = () => {
   const { user } = useAppSelector((state) => state.auth);
   const userMenu = useRef<Menu>(null);
   const { menuKeys, isLoaded: rbacLoaded } = useMenuPermissions();
-  // Loaded once here so that permission gates on the pages below resolve on first
-  // paint instead of each page fetching them on mount.
   useApiPermissions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+    const path = window.location.pathname;
+    const result: Record<string, boolean> = {};
+    if (path.startsWith('/masters')) result['Masters'] = true;
+    else if (path.startsWith('/users') || path.startsWith('/roles') || path.startsWith('/audit')) result['Management'] = true;
+    else if (path.startsWith('/workflows') || path.startsWith('/approval')) result['Workflow'] = true;
+    else if (path.startsWith('/services')) result['Services'] = true;
+    else result['Main'] = true;
+    return result;
+  });
 
   const navItems: NavItem[] = [
-    { label: 'Dashboard', icon: 'pi pi-th-large', path: '/dashboard', section: 'Main', menuKey: 'dashboard' },
+    { label: 'Dashboard', icon: 'pi pi-th-large', path: '/dashboard', menuKey: 'dashboard' },
     { label: 'Users', icon: 'pi pi-users', path: '/users', section: 'Management', menuKey: 'users' },
     { label: 'Roles & Permissions', icon: 'pi pi-shield', path: '/roles', section: 'Management', menuKey: 'roles' },
     { label: 'Audit Logs', icon: 'pi pi-history', path: '/audit-logs', section: 'Management', menuKey: 'audit_logs' },
-    { label: 'Countries', icon: 'pi pi-globe', path: '/masters/countries', section: 'Masters', menuKey: ['masters', 'masters.countries'] },
-    { label: 'States', icon: 'pi pi-map', path: '/masters/states', section: 'Masters', menuKey: ['masters', 'masters.states'] },
-    { label: 'Categories of Law', icon: 'pi pi-book', path: '/masters/categories-of-law', section: 'Masters', menuKey: ['masters', 'masters.categories_of_law'] },
-    { label: 'Legislations', icon: 'pi pi-file', path: '/masters/legislations', section: 'Masters', menuKey: ['masters', 'masters.legislations'] },
-    { label: 'Rules', icon: 'pi pi-list-check', path: '/masters/rules', section: 'Masters', menuKey: ['masters', 'masters.rules'] },
-    { label: 'Task Types', icon: 'pi pi-tags', path: '/masters/task-types', section: 'Masters', menuKey: ['masters', 'masters.task_types'] },
-    { label: 'Workflows', icon: 'pi pi-sitemap', path: '/workflows', section: 'Workflow', menuKey: 'workflows' },
-    { label: 'Approval Matrix', icon: 'pi pi-check-square', path: '/approval-matrix', section: 'Workflow', menuKey: 'workflows' },
+    { label: 'Business Units', icon: 'pi pi-building', path: '/masters/business-units', section: 'Masters', menuKey: ['masters', 'masters.business_units'] },
+    { label: 'Units', icon: 'pi pi-box', path: '/masters/units', section: 'Masters', menuKey: ['masters', 'masters.units'] },
+    { label: 'Formats', icon: 'pi pi-file-edit', path: '/masters/formats', section: 'Masters', menuKey: ['masters', 'masters.formats'] },
+    { label: 'Stages', icon: 'pi pi-list', path: '/masters/stages', section: 'Masters', menuKey: ['masters', 'masters.stages'] },
+    { label: 'Questions', icon: 'pi pi-question-circle', path: '/masters/questions', section: 'Masters', menuKey: ['masters', 'masters.questions'] },
+    { label: 'Products', icon: 'pi pi-shopping-bag', path: '/masters/products', section: 'Masters', menuKey: ['masters', 'masters.products'] },
+    { label: 'Validation Types', icon: 'pi pi-check-circle', path: '/masters/validation-types', section: 'Masters', menuKey: ['masters', 'masters.validation_types'] },
+    { label: 'Remarks', icon: 'pi pi-comment', path: '/masters/remarks', section: 'Masters', menuKey: ['masters', 'masters.remarks'] },
+    { label: 'SAP Fields', icon: 'pi pi-database', path: '/masters/sap-fields', section: 'Masters', menuKey: ['masters', 'masters.sap_fields'] },
+    { label: 'Stage Question Mapping', icon: 'pi pi-map', path: '/masters/formats-view', section: 'Masters', menuKey: ['masters', 'masters.stage_question_mapping'] },
+    { label: 'Workflows', icon: 'pi pi-share-alt', path: '/workflows', section: 'Workflow', menuKey: 'workflows' },
+    { label: 'Approval Matrix', icon: 'pi pi-sliders-h', path: '/approval-matrix', section: 'Workflow', menuKey: 'workflows' },
     { label: 'Employee AD', icon: 'pi pi-id-card', path: '/services/employee-ad', section: 'Services', menuKey: 'services' },
   ];
 
-  // Filter items based on RBAC menu permissions
   const visibleItems = navItems.filter((item) => {
-    if (!item.menuKey) return item.visible !== false;
+    if (!item.menuKey) return true;
     if (!rbacLoaded) return false;
     const required = Array.isArray(item.menuKey) ? item.menuKey : [item.menuKey];
     return required.every((key) => menuKeys.includes(key));
   });
 
-  const userMenuItems = [
-    {
-      label: `${user?.username}`,
-      icon: 'pi pi-user',
-      disabled: true,
-    },
-    { separator: true },
-    {
-      label: 'Profile',
-      icon: 'pi pi-id-card',
-      command: () => navigate('/profile'),
-    },
-    {
-      label: 'Logout',
-      icon: 'pi pi-sign-out',
-      command: async () => {
-        await dispatch(logoutThunk());
-        navigate('/login', { replace: true });
-      },
-    },
-  ];
-
-  // Group items by section
   const sections = visibleItems.reduce<Record<string, NavItem[]>>((acc, item) => {
     const section = item.section || 'Other';
     if (!acc[section]) acc[section] = [];
@@ -94,10 +88,19 @@ export const MainLayout = () => {
     return acc;
   }, {});
 
-  // Get current page label for breadcrumb
-  const currentPage = navItems.find((i) => i.path === location.pathname)?.label || '';
+  const toggleSection = (key: string) => {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
-  const sidebarWidth = sidebarCollapsed ? '60px' : '220px';
+  const userMenuItems = [
+    { label: `${user?.username}`, icon: 'pi pi-user', disabled: true },
+    { separator: true },
+    { label: 'Profile', icon: 'pi pi-id-card', command: () => navigate('/profile') },
+    { label: 'Logout', icon: 'pi pi-sign-out', command: async () => { await dispatch(logoutThunk()); navigate('/login', { replace: true }); } },
+  ];
+
+  const currentPage = navItems.find((i) => i.path === location.pathname)?.label || '';
+  const sidebarWidth = sidebarCollapsed ? '60px' : '230px';
 
   return (
     <div className="flex" style={{ height: '100vh', background: 'var(--color-surface-ground)', overflow: 'hidden' }}>
@@ -108,72 +111,99 @@ export const MainLayout = () => {
         aria-label="Sidebar navigation"
       >
         {/* Logo area */}
-        <div
-          className="flex align-items-center justify-content-between px-3"
-          style={{ height: '48px', borderBottom: '1px solid var(--color-surface-border)' }}
-        >
+        <div className={`em-logo-area flex align-items-center ${sidebarCollapsed ? 'justify-content-center' : 'justify-content-between'} px-3`}>
+          <span className="flex align-items-center gap-2 cursor-pointer"
+            onClick={() => { if (sidebarCollapsed) setSidebarCollapsed(false); }}>
+            <span className="em-app-icon flex align-items-center justify-content-center flex-shrink-0">
+              <i className="pi pi-book" />
+            </span>
+            {!sidebarCollapsed && (
+              <span className="em-app-name font-bold">QC-Checklist</span>
+            )}
+          </span>
           {!sidebarCollapsed && (
-            <span className="font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
-              QC-Checklist
+            <span className="em-collapse-btn flex align-items-center justify-content-center cursor-pointer"
+              onClick={() => setSidebarCollapsed(true)}>
+              <i className="pi pi-angle-double-left" />
             </span>
           )}
-          <Button
-            icon={sidebarCollapsed ? 'pi pi-angle-right' : 'pi pi-angle-left'}
-            rounded
-            text
-            severity="secondary"
-            size="small"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            aria-label="Toggle sidebar"
-            style={{ minWidth: '1.75rem', height: '1.75rem' }}
-          />
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-2 px-1">
-          {Object.entries(sections).map(([section, items]) => (
-            <div key={section} className="mb-2">
-              {!sidebarCollapsed && (
-                <div
-                  className="text-xs font-semibold uppercase mb-1 px-2"
-                  style={{ color: 'var(--color-text-muted)', letterSpacing: '0.05em', fontSize: '0.6rem' }}
-                >
-                  {section}
-                </div>
-              )}
-              {items.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
+        {/* Navigation with collapsible sections */}
+        <nav className="flex-1 overflow-y-auto py-2 px-2">
+          {/* Dashboard — standalone top-level item */}
+          {visibleItems.filter((i) => !i.section).map((item) => {
+            const isActive = location.pathname === item.path;
+            return sidebarCollapsed ? (
+              <div key={item.path} className="flex justify-content-center py-2 cursor-pointer"
+                style={{ marginBottom: '0.4rem' }}
+                onClick={() => navigate(item.path)}
+                data-pr-tooltip={item.label} data-pr-position="right">
+                <i className={item.icon} style={{ fontSize: '1.1rem', color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)' }} />
+              </div>
+            ) : (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`em-nav-section w-full flex align-items-center gap-2 border-none cursor-pointer transition-colors transition-duration-200 py-2 ${isActive ? 'em-nav-active' : ''}`}
+                aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <i className={item.icon} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+
+          {SECTIONS.map((sectionDef) => {
+            const items = sections[sectionDef.key];
+            if (!items || items.length === 0) return null;
+            const isExpanded = expandedSections[sectionDef.key] ?? false;
+            const hasActiveChild = items.some((i) => location.pathname === i.path);
+
+            return (
+              <div key={sectionDef.key} className="mb-1">
+                {/* Section header — collapsible */}
+                {!sidebarCollapsed ? (
                   <button
-                    key={item.path}
-                    onClick={() => navigate(item.path)}
-                    className={`w-full flex align-items-center gap-2 border-none cursor-pointer transition-colors transition-duration-200 ${sidebarCollapsed ? 'justify-content-center px-1 py-2' : 'px-2 py-2'} mb-1`}
-                    style={{
-                      background: isActive ? 'var(--color-primary-50)' : 'transparent',
-                      borderRadius: 'var(--radius-md)',
-                      borderLeft: !sidebarCollapsed ? (isActive ? '3px solid var(--color-primary)' : '3px solid transparent') : undefined,
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text-primary)',
-                      fontWeight: isActive ? 600 : 400,
-                      fontSize: '12px',
-                    }}
-                    aria-label={item.label}
-                    aria-current={isActive ? 'page' : undefined}
-                    data-pr-tooltip={sidebarCollapsed ? item.label : undefined}
-                    data-pr-position="right"
+                    onClick={() => toggleSection(sectionDef.key)}
+                    className="em-nav-section w-full flex align-items-center justify-content-between border-none cursor-pointer py-2"
+                    aria-expanded={isExpanded}
+                    aria-label={`${sectionDef.label} section`}
                   >
-                    <i
-                      className={item.icon}
-                      style={{
-                        fontSize: sidebarCollapsed ? '1.1rem' : '0.85rem',
-                        color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                      }}
-                    />
-                    {!sidebarCollapsed && <span>{item.label}</span>}
+                    <span className="flex align-items-center gap-2">
+                      <i className={sectionDef.icon} />
+                      <span>{sectionDef.label}</span>
+                    </span>
+                    <i className={`em-nav-chevron ${isExpanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'}`} />
                   </button>
-                );
-              })}
-            </div>
-          ))}
+                ) : (
+                  <div className="flex justify-content-center py-2"
+                    style={{ marginBottom: '0.4rem' }}
+                    data-pr-tooltip={sectionDef.label} data-pr-position="right">
+                    <i className={sectionDef.icon} style={{ fontSize: '1.1rem', color: hasActiveChild ? 'var(--color-primary)' : 'var(--color-text-muted)' }} />
+                  </div>
+                )}
+
+                {/* Section children — visible only when expanded AND sidebar is not collapsed */}
+                {isExpanded && !sidebarCollapsed && items.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className={`em-nav-item w-full flex align-items-center gap-2 border-none cursor-pointer transition-colors transition-duration-200 pr-2 py-2 ${isActive ? 'em-nav-active' : ''}`}
+                      aria-label={item.label}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      <i className={item.icon} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
       </aside>
 
@@ -182,59 +212,27 @@ export const MainLayout = () => {
       {/* ─── Main Content Area ─── */}
       <div className="flex-1 flex flex-column" style={{ minWidth: 0, height: '100vh', overflow: 'hidden' }}>
         {/* Top Bar */}
-        <header
-          className="em-topbar flex align-items-center justify-content-between px-3"
-          style={{ height: '48px' }}
-          aria-label="Top bar"
-        >
-          {/* Left: Breadcrumb */}
+        <header className="em-topbar flex align-items-center justify-content-between px-3" style={{ height: '48px' }} aria-label="Top bar">
           <div className="flex align-items-center gap-2">
-            <span className="text-600" style={{ fontSize: '12px' }}>
-              <i className="pi pi-home" style={{ fontSize: '11px' }} />
-            </span>
+            <span className="text-600" style={{ fontSize: '12px' }}><i className="pi pi-home" style={{ fontSize: '11px' }} /></span>
             {currentPage && (
               <>
                 <span className="text-400" style={{ fontSize: '11px' }}>/</span>
-                <span className="font-medium" style={{ fontSize: '12px', color: 'var(--color-text-primary)' }}>
-                  {currentPage}
-                </span>
+                <span className="font-medium" style={{ fontSize: '12px', color: 'var(--color-text-primary)' }}>{currentPage}</span>
               </>
             )}
           </div>
-
-          {/* Right: Notifications + User */}
           <div className="flex align-items-center gap-2">
-            <Button
-              icon="pi pi-bell"
-              rounded
-              text
-              severity="secondary"
-              aria-label="Notifications"
-              className="p-overlay-badge"
-              style={{ width: '2rem', height: '2rem' }}
-            >
+            <Button icon="pi pi-bell" text severity="secondary" aria-label="Notifications"
+              className="p-overlay-badge" style={{ width: '2rem', height: '2rem' }}>
               <Badge value="3" severity="danger" style={{ fontSize: '0.6rem', minWidth: '1rem', height: '1rem', lineHeight: '1rem' }} />
             </Button>
-
             <Menu model={userMenuItems} popup ref={userMenu} />
-            <Button
-              rounded
-              text
-              onClick={(e) => userMenu.current?.toggle(e)}
-              aria-label="User menu"
-              className="flex align-items-center gap-1"
-              style={{ padding: '0.25rem' }}
-            >
-              <Avatar
-                label={user?.username?.charAt(0).toUpperCase() || 'U'}
-                shape="circle"
-                size="normal"
-                style={{ background: 'var(--color-primary)', color: '#fff', width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }}
-              />
-              <span
-                className="hidden lg:inline font-medium"
-                style={{ color: 'var(--color-text-primary)', fontSize: '12px' }}
-              >
+            <Button text onClick={(e) => userMenu.current?.toggle(e)} aria-label="User menu"
+              className="flex align-items-center gap-1" style={{ padding: '0.25rem' }}>
+              <Avatar label={user?.username?.charAt(0).toUpperCase() || 'U'} shape="circle" size="normal"
+                style={{ background: 'var(--color-primary)', color: '#fff', width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }} />
+              <span className="hidden lg:inline font-medium" style={{ color: 'var(--color-text-primary)', fontSize: '12px' }}>
                 {user?.username}
               </span>
             </Button>

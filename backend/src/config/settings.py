@@ -91,6 +91,14 @@ class Settings(BaseSettings):
         description="Base URL for the Darwin AD integrator service",
     )
 
+    # Email (Office365 / SMTP)
+    SMTP_HOST: str = Field(default="smtp.office365.com", description="SMTP host")
+    SMTP_PORT: int = Field(default=25, description="SMTP port")
+    SMTP_USER: str = Field(default="", description="SMTP username")
+    SMTP_PASSWORD: str = Field(default="", description="SMTP password")
+    EMAIL_FROM: str = Field(default="", description="Sender email address")
+    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend base URL")
+
 
 
     # CORS

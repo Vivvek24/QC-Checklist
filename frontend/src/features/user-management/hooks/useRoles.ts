@@ -1,7 +1,6 @@
 /**
  * Hook to fetch roles from the RBAC roles table.
- * Used in user create/edit forms to populate the role dropdown dynamically.
- * Returns role ID as the value for use with role_assignments.
+ * Returns role ID as number for use with role_assignments.
  */
 
 import { useEffect, useState } from 'react';
@@ -9,11 +8,11 @@ import { apiClient } from '@shared/services/apiClient';
 
 interface RoleOption {
   label: string;
-  value: string; // role ID (UUID)
+  value: number; // role ID (BigInt)
 }
 
 interface RoleFromApi {
-  id: string;
+  id: number;
   code: string;
   name: string;
   is_active: boolean;

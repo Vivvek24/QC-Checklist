@@ -1,16 +1,12 @@
 /**
- * Edit and delete row actions, using the rounded outlined icon buttons the UI
- * standard prescribes for row-level actions.
+ * Edit and delete row actions — rounded text raised style.
  */
 
 import { Button } from 'primereact/button';
 
 interface MasterRowActionsProps {
-  /** Row name, used for the accessible labels. */
   label: string;
-  /** Whether the caller holds UPDATE on this resource. */
   canUpdate: boolean;
-  /** Whether the caller holds DELETE on this resource. */
   canDelete: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -23,15 +19,17 @@ export const MasterRowActions = ({
   onEdit,
   onDelete,
 }: MasterRowActionsProps) => (
-  <div className="flex gap-1">
+  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
     {canUpdate && (
       <Button
+        type="button"
         icon="pi pi-pencil"
         rounded
-        outlined
-        severity="info"
+        text
+        raised
+        severity="success"
         size="small"
-        onClick={onEdit}
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
         tooltip="Edit"
         tooltipOptions={{ position: 'top' }}
         aria-label={`Edit ${label}`}
@@ -39,12 +37,14 @@ export const MasterRowActions = ({
     )}
     {canDelete && (
       <Button
+        type="button"
         icon="pi pi-trash"
         rounded
-        outlined
+        text
+        raised
         severity="danger"
         size="small"
-        onClick={onDelete}
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
         tooltip="Delete"
         tooltipOptions={{ position: 'top' }}
         aria-label={`Delete ${label}`}

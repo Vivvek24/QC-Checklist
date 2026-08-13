@@ -1,6 +1,7 @@
 /**
  * User Management API calls.
  * Maps to backend: GET/POST /api/v1/users, GET/PATCH /api/v1/users/{id}
+ * ids are numbers (BigInt).
  */
 
 import { apiClient } from '@shared/services/apiClient';
@@ -21,7 +22,7 @@ export const userApi = {
     return data;
   },
 
-  getUserById: async (userId: string): Promise<User> => {
+  getUserById: async (userId: number): Promise<User> => {
     const { data } = await apiClient.get<User>(`/users/${userId}`);
     return data;
   },
@@ -31,12 +32,12 @@ export const userApi = {
     return data;
   },
 
-  updateUser: async (userId: string, request: UpdateUserRequest): Promise<User> => {
+  updateUser: async (userId: number, request: UpdateUserRequest): Promise<User> => {
     const { data } = await apiClient.patch<User>(`/users/${userId}`, request);
     return data;
   },
 
-  getUserRoles: async (userId: string): Promise<UserRolesResponse> => {
+  getUserRoles: async (userId: number): Promise<UserRolesResponse> => {
     const { data } = await apiClient.get<UserRolesResponse>(`/users/${userId}/roles`);
     return data;
   },

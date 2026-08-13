@@ -26,6 +26,25 @@ class UserDetailsRepositoryImpl(IUserDetailsRepository):
         result = await self._session.execute(stmt)
         return {m.user_id: self._to_entity(m) for m in result.scalars().all()}
 
+    async def upsert_email(self, user_id: int, email: str, modified_by: str) -> None:
+        """Set the email on an existing user_details row, or create a minimal row if none exists."""
+        stmt = select(UserDetailsModel).where(UserDetailsModel.user_id == user_id)
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        if model:
+            model.email = email
+            model.modified_by = modified_by
+        else:
+            model = UserDetailsModel(
+                user_id=user_id,
+                employee_id="",
+                email=email,
+                created_by=modified_by,
+                modified_by=modified_by,
+            )
+            self._session.add(model)
+        await self._session.flush()
+
     @staticmethod
     def _to_entity(model: UserDetailsModel) -> UserDetails:
         return UserDetails(

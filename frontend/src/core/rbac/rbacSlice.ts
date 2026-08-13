@@ -90,16 +90,6 @@ export const fetchApiPermissions = createAsyncThunk(
         error.response?.data?.detail || 'Failed to load API permissions'
       );
     }
-  },
-  {
-    /**
-     * Every gate self-loads, so a screen with several permission checks would
-     * otherwise fire one identical request per check. This collapses them to one.
-     */
-    condition: (_arg, { getState }) => {
-      const { rbac } = getState() as { rbac: RbacState };
-      return !rbac.isApiLoaded && !rbac.isApiLoading;
-    },
   }
 );
 

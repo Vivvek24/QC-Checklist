@@ -146,7 +146,6 @@ async def import_employees(
                     # Create new user. Password defaults to the employee id and
                     # must be changed on first login.
                     user_model = UserModel(
-                        id=uuid4(),
                         username=emp_id,
                         password_hash=hash_password(emp_id),
                         is_active=True,
@@ -225,7 +224,6 @@ def _extract_details_fields(
     full_name = " ".join(part for part in [first, middle, last] if part)
 
     return {
-        "id": uuid4(),
         "user_id": user_id,
         "employee_id": get("employee_id"),
         "employee_name": full_name,
