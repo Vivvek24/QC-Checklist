@@ -56,6 +56,7 @@ export const MainLayout = () => {
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', icon: 'pi pi-th-large', path: '/dashboard', menuKey: 'dashboard' },
+    { label: 'Create Request', icon: 'pi pi-file-plus', path: '/qc-checklist/create-request', menuKey: 'qc_checklist' },
     { label: 'Users', icon: 'pi pi-users', path: '/users', section: 'Management', menuKey: 'users' },
     { label: 'Roles & Permissions', icon: 'pi pi-shield', path: '/roles', section: 'Management', menuKey: 'roles' },
     { label: 'Audit Logs', icon: 'pi pi-history', path: '/audit-logs', section: 'Management', menuKey: 'audit_logs' },

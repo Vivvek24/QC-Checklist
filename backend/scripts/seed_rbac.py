@@ -136,6 +136,33 @@ _PERMISSION_TABLE = [
     ("test_masters.create", "API", "test_masters", "CREATE", "Create Test Master"),
     ("test_masters.update", "API", "test_masters", "UPDATE", "Update Test Master"),
     ("test_masters.delete", "API", "test_masters", "DELETE", "Delete Test Master"),
+    # ─── QC Checklist ───
+    ("menu.qc_checklist",              "MENU", "qc_checklist",        "READ",   "Create Request Page"),
+    ("dashboard.read",                 "API", "dashboard",            "READ",   "View Dashboard Data"),
+    ("checklist_requests.list",        "API", "checklist_requests",   "READ",   "List Checklist Requests"),
+    ("checklist_requests.create",      "API", "checklist_requests",   "CREATE", "Create Checklist Request"),
+    ("checklist_requests.update",      "API", "checklist_requests",   "UPDATE", "Update Checklist Request"),
+    ("checklist_requests.delete",      "API", "checklist_requests",   "DELETE", "Delete Checklist Request"),
+    ("checklist_stages.list",          "API", "checklist_stages",     "READ",   "List Checklist Stages"),
+    ("checklist_stages.create",        "API", "checklist_stages",     "CREATE", "Create Checklist Stage"),
+    ("checklist_stages.update",        "API", "checklist_stages",     "UPDATE", "Update Checklist Stage"),
+    ("checklist_stages.delete",        "API", "checklist_stages",     "DELETE", "Delete Checklist Stage"),
+    ("checklist_stage_sections.list",   "API", "checklist_stage_sections", "READ",   "List Checklist Stage Sections"),
+    ("checklist_stage_sections.create", "API", "checklist_stage_sections", "CREATE", "Create Checklist Stage Section"),
+    ("checklist_stage_sections.update", "API", "checklist_stage_sections", "UPDATE", "Update Checklist Stage Section"),
+    ("checklist_stage_sections.delete", "API", "checklist_stage_sections", "DELETE", "Delete Checklist Stage Section"),
+    ("stage_approval_label_mappings.list",   "API", "stage_approval_label_mappings", "READ",   "List Stage Approval Label Mappings"),
+    ("stage_approval_label_mappings.create", "API", "stage_approval_label_mappings", "CREATE", "Create Stage Approval Label Mapping"),
+    ("stage_approval_label_mappings.update", "API", "stage_approval_label_mappings", "UPDATE", "Update Stage Approval Label Mapping"),
+    ("stage_approval_label_mappings.delete", "API", "stage_approval_label_mappings", "DELETE", "Delete Stage Approval Label Mapping"),
+    ("question_answers.list",   "API", "question_answers", "READ",   "List Question Answers"),
+    ("question_answers.create", "API", "question_answers", "CREATE", "Create Question Answer"),
+    ("question_answers.update", "API", "question_answers", "UPDATE", "Update Question Answer"),
+    ("question_answers.delete", "API", "question_answers", "DELETE", "Delete Question Answer"),
+    ("question_answer_helpers.list",   "API", "question_answer_helpers", "READ",   "List Question Answer Helpers"),
+    ("question_answer_helpers.create", "API", "question_answer_helpers", "CREATE", "Create Question Answer Helper"),
+    ("question_answer_helpers.update", "API", "question_answer_helpers", "UPDATE", "Update Question Answer Helper"),
+    ("question_answer_helpers.delete", "API", "question_answer_helpers", "DELETE", "Delete Question Answer Helper"),
     # ─── Workflow engine ───
     ("workflows.list",               "API", "workflows",          "READ",   "List Workflows"),
     ("workflows.create",             "API", "workflows",          "CREATE", "Create Workflow"),
@@ -248,7 +275,7 @@ async def seed() -> None:
         users = (await session.execute(select(UserModel))).scalars().all()
         for user in users:
             existing = (await session.execute(
-                select(RoleAssignmentModel).where(RoleAssignmentModel.user_id == user.id)
+                select(RoleAssignmentModel).where(RoleAssignmentModel.user_id == user.id).limit(1)
             )).scalar_one_or_none()
             if existing:
                 print(f"  [skip] User '{user.username}' already has a role assignment")

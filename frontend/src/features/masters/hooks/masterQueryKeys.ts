@@ -25,4 +25,5 @@ export const MASTER_KEYS = {
   remarks: ['masters', 'remarks'] as QueryKey,
   sapFields: ['masters', 'sap-fields'] as QueryKey,
   approvalLabels: ['masters', 'approval-labels'] as QueryKey,
+  testMasters: ['masters', 'test-masters'] as QueryKey,
 } as const;

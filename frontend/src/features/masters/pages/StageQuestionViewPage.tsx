@@ -7,8 +7,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from 'primereact/button';
-import { Column } from 'primereact/column';
-import { DataTable } from 'primereact/datatable';
 import { Dialog } from 'primereact/dialog';
 import { InputSwitch } from 'primereact/inputswitch';
 import { InputText } from 'primereact/inputtext';
@@ -16,7 +14,10 @@ import { apiClient } from '@shared/services/apiClient';
 import { useStages } from '../hooks/useStages';
 import { useQuestions } from '../hooks/useQuestions';
 import { MasterRowActions } from '../components/MasterRowActions';
+import { StageQuestionGrid } from '../components/view/StageQuestionGrid';
+import { SectionStageQuestionGrid } from '../components/view/SectionStageQuestionGrid';
 import { StageQuestionMappingPage } from './StageQuestionMappingPage';
+import { SectionStageQuestionMappingPage } from './SectionStageQuestionMappingPage';
 import { AddSectionPage } from './AddSectionPage';
 import { BASIC_DETAILS_STAGE } from '../constants';
 
@@ -35,6 +36,9 @@ interface StageQuestionMapping {
   section_id: number | null;
   serial_number: number;
   show_on_grid: boolean;
+  aql_limit: string;
+  is_declaration_question: boolean;
+  is_editable: boolean;
   is_active: boolean;
 }
 
@@ -55,9 +59,13 @@ export const StageQuestionViewPage = () => {
   const { formatId } = useParams<{ formatId: string }>();
   const navigate = useNavigate();
   const { data: stagesData } = useStages();
-  const { data: questionsData } = useQuestions();
+  const { data: questionsData, isLoading: questionsLoading } = useQuestions();
   const stageMap = Object.fromEntries((stagesData?.items ?? []).map((s) => [Number(s.id), s.stage_name]));
   const questionMap = Object.fromEntries((questionsData?.items ?? []).map((q) => [Number(q.id), q.title]));
+  const subQuestionIdsMap: Record<number, number[]> = Object.fromEntries(
+    (questionsData?.items ?? []).filter((q: any) => q.has_sub_question && q.sub_question_ids?.length)
+      .map((q: any) => [Number(q.id), q.sub_question_ids as number[]])
+  );
 
   const [formatDetail, setFormatDetail] = useState<FormatDetail | null>(null);
   const [mappings, setMappings] = useState<FormatStageMapping[]>([]);
@@ -67,6 +75,7 @@ export const StageQuestionViewPage = () => {
   // Add question popup state
   const [addFormVisible, setAddFormVisible] = useState(false);
   const [selectedMapping, setSelectedMapping] = useState<FormatStageMapping | null>(null);
+  const [editingRow, setEditingRow] = useState<StageQuestionMapping | null>(null);
 
   // Add section popup state
   const [addSectionVisible, setAddSectionVisible] = useState(false);
@@ -85,36 +94,56 @@ export const StageQuestionViewPage = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [fmtRes, mapRes] = await Promise.all([
+      // Single API call — returns format + all stages + questions + sections in one shot
+      const [fmtRes, previewRes] = await Promise.all([
         apiClient.get<FormatDetail & { format_name: string }>(`/masters/formats/${formatId}`),
-        apiClient.get<{ items: FormatStageMapping[] }>('/masters/format-stage-mappings', { params: { format_id: formatId } }),
+        apiClient.get<{
+          format_id: number; format_name: string; format_no: string;
+          stages: Array<{
+            format_stage_mapping_id: number; stage_id: number; stage_name: string;
+            is_approvable: boolean; has_section: boolean; status: string;
+            questions: Array<{ stage_question_mapping_id: number; question_id: number; question_title: string; serial_number: number; section_id: number | null; section_name: string | null }>;
+            sections: Array<{ section_id: number; section_name: string; questions: Array<{ stage_question_mapping_id: number; question_id: number; question_title: string; serial_number: number }> }>;
+            approval_labels: Array<{ approval_label_id: number; label: string }>;
+          }>;
+        }>('/qc-checklist/preview', { params: { format_id: formatId } }),
       ]);
+
       setFormatDetail({ format_name: fmtRes.data.format_name, format_type: fmtRes.data.format_type, has_declaration_question: fmtRes.data.has_declaration_question });
-      const fsMappings = mapRes.data.items ?? [];
+
+      // Map preview data to existing state shape
+      const fsMappings: FormatStageMapping[] = previewRes.data.stages.map((s) => ({
+        id: s.format_stage_mapping_id,
+        format_id: Number(formatId),
+        stage_id: s.stage_id,
+        is_active: true,
+        has_section: s.has_section,
+      }));
       setMappings(fsMappings);
 
-      // Load question mappings for each format-stage mapping
+      // Build question mappings from preview (already has question titles resolved)
       const qmMap: Record<number, StageQuestionMapping[]> = {};
-      await Promise.all(fsMappings.map(async (fsm) => {
-        try {
-          const { data } = await apiClient.get<{ items: StageQuestionMapping[] }>(
-            '/masters/stage-question-mappings', { params: { format_stage_mapping_id: fsm.id } }
-          );
-          qmMap[fsm.id] = data.items ?? [];
-        } catch { qmMap[fsm.id] = []; }
-      }));
+      for (const s of previewRes.data.stages) {
+        const allQs: StageQuestionMapping[] = [
+          ...s.questions.map((q: any) => ({ id: q.stage_question_mapping_id, format_stage_mapping_id: s.format_stage_mapping_id, question_id: q.question_id, section_id: q.section_id, serial_number: q.serial_number, show_on_grid: q.show_on_grid ?? false, aql_limit: q.aql_limit ?? '', is_declaration_question: q.is_declaration_question ?? false, is_editable: q.is_editable ?? true, is_active: true })),
+          ...s.sections.flatMap((sec: any) => sec.questions.map((q: any) => ({ id: q.stage_question_mapping_id, format_stage_mapping_id: s.format_stage_mapping_id, question_id: q.question_id, section_id: sec.section_id, serial_number: q.serial_number, show_on_grid: q.show_on_grid ?? false, aql_limit: q.aql_limit ?? '', is_declaration_question: q.is_declaration_question ?? false, is_editable: q.is_editable ?? true, is_active: true }))),
+        ];
+        qmMap[s.format_stage_mapping_id] = allQs;
+      }
       setQuestionMappings(qmMap);
 
-      // Load sections for mappings where has_section is true
+      // Build sections from preview
       const secMap: Record<number, SectionItem[]> = {};
-      await Promise.all(fsMappings.filter((fsm) => fsm.has_section).map(async (fsm) => {
-        try {
-          const { data } = await apiClient.get<{ items: SectionItem[] }>(
-            '/masters/sections', { params: { format_stage_mapping_id: fsm.id } }
-          );
-          secMap[fsm.id] = data.items ?? [];
-        } catch { secMap[fsm.id] = []; }
-      }));
+      for (const s of previewRes.data.stages) {
+        if (s.has_section && s.sections.length > 0) {
+          secMap[s.format_stage_mapping_id] = s.sections.map((sec) => ({
+            id: sec.section_id,
+            section_name: sec.section_name,
+            format_stage_mapping_id: s.format_stage_mapping_id,
+            is_active: true,
+          }));
+        }
+      }
       setSectionsByMapping(secMap);
     } catch {
       setFormatDetail(null);
@@ -181,7 +210,7 @@ export const StageQuestionViewPage = () => {
       </div>
 
       <div className="surface-card p-3 border-round shadow-1">
-        {loading ? (
+        {loading || questionsLoading ? (
           <div className="flex align-items-center justify-content-center p-4">
             <i className="pi pi-spin pi-spinner text-2xl" />
           </div>
@@ -215,15 +244,12 @@ export const StageQuestionViewPage = () => {
 
                 {/* Questions grid for this stage — hidden when has_section is ON */}
                 {!m.has_section && (questionMappings[m.id] ?? []).length > 0 && (
-                  <DataTable value={[...(questionMappings[m.id] ?? [])].sort((a, b) => a.serial_number - b.serial_number)}
-                    size="small" stripedRows style={{ fontSize: '0.78rem', marginLeft: '1rem' }}>
-                    <Column field="serial_number" header="Sr No" style={{ width: '4rem' }} />
-                    <Column header="Question" body={(row: StageQuestionMapping) => questionMap[row.question_id] ?? row.question_id} />
-                    <Column header="Actions" body={(row: StageQuestionMapping) => (
-                      <MasterRowActions label="question" canUpdate={false} canDelete={true}
-                        onEdit={() => {}} onDelete={() => deleteQuestionMapping(row.id)} />
-                    )} style={{ width: '5rem' }} />
-                  </DataTable>
+                  <StageQuestionGrid
+                    questions={(questionMappings[m.id] ?? []) as any}
+                    questionMap={questionMap}
+                    onEdit={(row) => { setSelectedMapping(m); setEditingRow(row as any); setAddFormVisible(true); }}
+                    onDelete={(id) => deleteQuestionMapping(id)}
+                  />
                 )}
 
                 {/* Sections grid for this stage (when has_section is ON) */}
@@ -248,15 +274,13 @@ export const StageQuestionViewPage = () => {
                           </div>
                           {/* Questions under this section */}
                           {sectionQuestions.length > 0 && (
-                            <DataTable value={sectionQuestions}
-                              size="small" stripedRows style={{ fontSize: '0.75rem', marginLeft: '1rem', marginTop: '0.25rem' }}>
-                              <Column field="serial_number" header="Sr" style={{ width: '3rem' }} />
-                              <Column header="Question" body={(row: StageQuestionMapping) => questionMap[row.question_id] ?? row.question_id} />
-                              <Column header="" body={(row: StageQuestionMapping) => (
-                                <MasterRowActions label="q" canUpdate={false} canDelete={true}
-                                  onEdit={() => {}} onDelete={() => deleteQuestionMapping(row.id)} />
-                              )} style={{ width: '4rem' }} />
-                            </DataTable>
+                            <SectionStageQuestionGrid
+                              questions={sectionQuestions as any}
+                              questionMap={questionMap}
+                              subQuestionIdsMap={subQuestionIdsMap}
+                              onEdit={(row) => { setSelectedMapping(m); setEditingRow(row as any); setSelectedSectionId(sec.id); setSectionQuestionVisible(true); }}
+                              onDelete={(id) => deleteQuestionMapping(id)}
+                            />
                           )}
                         </div>
                       );
@@ -278,7 +302,17 @@ export const StageQuestionViewPage = () => {
           formatType={formatDetail.format_type}
           hasDeclarationQuestion={formatDetail.has_declaration_question}
           defaultSerialNumber={nextSerialNumber}
-          onHide={() => { setAddFormVisible(false); setSelectedMapping(null); }}
+          initialData={editingRow ? {
+            serial_number: editingRow.serial_number,
+            question_id: editingRow.question_id,
+            show_on_grid: editingRow.show_on_grid,
+            aql_limit: editingRow.aql_limit || '',
+            is_editable: editingRow.is_editable,
+            is_declaration_question: editingRow.is_declaration_question,
+            is_active: editingRow.is_active,
+          } : undefined}
+          editingId={editingRow?.id ?? null}
+          onHide={() => { setAddFormVisible(false); setSelectedMapping(null); setEditingRow(null); }}
           onSuccess={loadData}
         />
       )}
@@ -294,16 +328,23 @@ export const StageQuestionViewPage = () => {
       )}
 
       {/* Add Question to Section popup */}
-      {formatDetail && selectedMapping && sectionQuestionVisible && (
-        <StageQuestionMappingPage
+      {formatDetail && selectedMapping && sectionQuestionVisible && selectedSectionId && (
+        <SectionStageQuestionMappingPage
           visible={sectionQuestionVisible}
           formatStageMappingId={selectedMapping.id}
-          stageName={selectedStageName}
+          sectionId={selectedSectionId}
           formatType={formatDetail.format_type}
           hasDeclarationQuestion={formatDetail.has_declaration_question}
           defaultSerialNumber={nextSerialNumber}
-          sectionId={selectedSectionId}
-          onHide={() => { setSectionQuestionVisible(false); setSelectedSectionId(null); setSelectedMapping(null); }}
+          editingId={editingRow?.id ?? null}
+          initialData={editingRow ? {
+            serial_number: editingRow.serial_number,
+            question_id: editingRow.question_id,
+            aql_limit: editingRow.aql_limit || '',
+            is_declaration_question: editingRow.is_declaration_question,
+            is_active: editingRow.is_active,
+          } : undefined}
+          onHide={() => { setSectionQuestionVisible(false); setSelectedSectionId(null); setSelectedMapping(null); setEditingRow(null); }}
           onSuccess={loadData}
         />
       )}

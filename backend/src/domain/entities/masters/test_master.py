@@ -10,7 +10,7 @@ class TestMaster(BaseEntity):
     """Test master linked to a Product."""
 
     test_name: str = field(default="")
-    no_of_samples_issued: int = field(default=0)
+    sample_description: str = field(default="")
     sample_qty: int = field(default=0)
     product_id: int = field(default=0)
     is_active: bool = field(default=True)

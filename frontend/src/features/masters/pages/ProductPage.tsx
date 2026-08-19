@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FilterMatchMode } from 'primereact/api';
+import { Button } from 'primereact/button';
 import { Column } from 'primereact/column';
 import type { DataTableFilterMeta } from 'primereact/datatable';
 import { ProductForm } from '../components/ProductForm';
@@ -16,6 +18,7 @@ const defaultFilters: DataTableFilterMeta = {
 };
 
 export const ProductPage = () => {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<DataTableFilterMeta>(defaultFilters);
   const { data, isLoading, refetch, isRefetching } = useProducts();
   const createMutation = useCreateProduct();
@@ -40,6 +43,10 @@ export const ProductPage = () => {
         <>
           <Column field="product_name" header="Product Name" sortable filter filterPlaceholder="Search..." />
           <Column field="storage_conditions" header="Storage Conditions" body={(row: Product) => row.storage_conditions || '—'} />
+          <Column header="Tests" body={(row: Product) => (
+            <Button label="Tests" icon="pi pi-link" rounded text raised size="small" severity="success"
+              onClick={() => navigate(`/masters/products/${row.id}/tests`)} type="button" />
+          )} style={{ width: '8rem' }} />
           <Column header="Status" body={(row: Product) => <MasterStatusTag isActive={row.is_active} />} style={{ width: '8rem' }} />
           {permissions.canModifyRows && (
             <Column header="Actions" body={(row: Product) => (

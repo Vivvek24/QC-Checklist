@@ -24,13 +24,14 @@ const schema = z.object({
   is_editable: z.boolean(),
   is_declaration_question: z.boolean(),
   custom_answers: z.string().nullable(),
+  aql_limit: z.string(),
   is_active: z.boolean(),
 });
 type FD = z.infer<typeof schema>;
 const EMPTY: FD = {
   serial_number: 0, question_id: 0, show_on_grid: false,
   sap_field_id: null, is_editable: true, is_declaration_question: false,
-  custom_answers: null, is_active: true,
+  custom_answers: null, aql_limit: '', is_active: true,
 };
 
 export interface AddStageQuestionFormData {
@@ -41,6 +42,7 @@ export interface AddStageQuestionFormData {
   is_editable: boolean;
   is_declaration_question: boolean;
   custom_answers: string | null;
+  aql_limit: string;
   is_active: boolean;
 }
 
@@ -50,12 +52,13 @@ interface Props {
   formatType: string;
   hasDeclarationQuestion: boolean;
   defaultSerialNumber?: number;
+  initialData?: Partial<AddStageQuestionFormData>;
   saving?: boolean;
   onHide: () => void;
   onSubmit: (data: AddStageQuestionFormData) => void;
 }
 
-export const AddStageQuestionForm = ({ visible, stageName, formatType, hasDeclarationQuestion, defaultSerialNumber, saving, onHide, onSubmit }: Props) => {
+export const AddStageQuestionForm = ({ visible, stageName, formatType, hasDeclarationQuestion, defaultSerialNumber, initialData, saving, onHide, onSubmit }: Props) => {
   const { data: questionsData } = useQuestions();
   const { data: sapFieldsData } = useSapFields();
 
@@ -66,7 +69,7 @@ export const AddStageQuestionForm = ({ visible, stageName, formatType, hasDeclar
     resolver: zodResolver(schema), defaultValues: EMPTY,
   });
 
-  useEffect(() => { if (visible) reset({ ...EMPTY, serial_number: defaultSerialNumber ?? 0 }); }, [visible, reset, defaultSerialNumber]);
+  useEffect(() => { if (visible) reset({ ...EMPTY, serial_number: defaultSerialNumber ?? 0, ...initialData }); }, [visible, reset, defaultSerialNumber, initialData]);
 
   const close = () => { reset(EMPTY); onHide(); };
 
@@ -163,6 +166,17 @@ export const AddStageQuestionForm = ({ visible, stageName, formatType, hasDeclar
               <Dropdown value={field.value} options={CUSTOM_ANSWER_OPTIONS}
                 onChange={(e) => field.onChange(e.value)} placeholder="Select Custom Answer"
                 showClear className="w-full" />
+            )} />
+          </div>
+        )}
+
+        {/* AQL Limit — when format_type = AQL */}
+        {isAQL && (
+          <div className="flex flex-column gap-2">
+            <label className="font-medium text-sm">AQL Limit</label>
+            <Controller name="aql_limit" control={control} render={({ field }) => (
+              <InputText value={field.value} onChange={(e) => field.onChange(e.target.value)}
+                placeholder="e.g. 0.5" className="w-full" />
             )} />
           </div>
         )}

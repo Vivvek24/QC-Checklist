@@ -35,7 +35,7 @@ class TestMasterService:
             raise DuplicateEntityError(ENTITY, "test_name", dto.test_name)
         created = await self._repo.create(TestMaster(
             test_name=dto.test_name.strip(),
-            no_of_samples_issued=dto.no_of_samples_issued,
+            sample_description=dto.sample_description,
             sample_qty=dto.sample_qty,
             product_id=dto.product_id,
             is_active=dto.is_active,
@@ -50,8 +50,8 @@ class TestMasterService:
             if await self._repo.exists_by_name(dto.test_name, exclude_id=test_id):
                 raise DuplicateEntityError(ENTITY, "test_name", dto.test_name)
             test.test_name = dto.test_name.strip()
-        if dto.no_of_samples_issued is not None:
-            test.no_of_samples_issued = dto.no_of_samples_issued
+        if dto.sample_description is not None:
+            test.sample_description = dto.sample_description
         if dto.sample_qty is not None:
             test.sample_qty = dto.sample_qty
         if dto.product_id is not None:
@@ -76,7 +76,7 @@ class TestMasterService:
         return TestMasterDTO(
             id=t.id,
             test_name=t.test_name,
-            no_of_samples_issued=t.no_of_samples_issued,
+            sample_description=t.sample_description,
             sample_qty=t.sample_qty,
             product_id=t.product_id,
             is_active=t.is_active,

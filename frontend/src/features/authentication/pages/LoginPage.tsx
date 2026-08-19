@@ -6,7 +6,7 @@
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InputText } from 'primereact/inputtext';
 import { Password } from 'primereact/password';
@@ -31,6 +31,12 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const { isLoading, error } = useAppSelector((state) => state.auth);
   const [msLoading, setMsLoading] = useState(false);
+
+  // Clear any stale redirect from a previous session — it may point to a
+  // page the new user logging in doesn't have access to.
+  useEffect(() => {
+    sessionStorage.removeItem('redirectAfterLogin');
+  }, []);
 
   const {
     register,

@@ -14,7 +14,9 @@ import {
   WorkflowBuilderPage,
   ApprovalMatrixPage,
 } from '@features/workflow-admin';
-import { BusinessUnitPage, UnitPage, FormatPage, StagePage, QuestionPage, ProductPage, ValidationTypePage, RemarkPage, SapFieldPage, ApprovalLabelPage, FormatStagesPage, FormatsViewPage, StageQuestionViewPage } from '@features/masters';
+import { BusinessUnitPage, UnitPage, FormatPage, StagePage, QuestionPage, ProductPage, ValidationTypePage, RemarkPage, SapFieldPage, ApprovalLabelPage, FormatStagesPage, FormatsViewPage, StageQuestionViewPage, ProductTestsPage } from '@features/masters';
+import { CreateRequestPage } from '@features/qc-checklist';
+import { DashboardPage } from '@features/dashboard';
 import { MainLayout } from '@app/layouts/MainLayout';
 import { PrivateRoute } from './PrivateRoute';
 import { AuthBootstrap } from './AuthBootstrap';
@@ -41,7 +43,19 @@ export const AppRouter = () => {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route
               path="dashboard"
-              element={<div className="p-4"><h2>Dashboard</h2><p>Welcome to QC-Checklist</p></div>}
+              element={
+                <PrivateRoute menuKey="dashboard">
+                  <DashboardPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="qc-checklist/create-request"
+              element={
+                <PrivateRoute menuKey="qc_checklist">
+                  <CreateRequestPage />
+                </PrivateRoute>
+              }
             />
             <Route
               path="users"
@@ -114,6 +128,14 @@ export const AppRouter = () => {
               element={
                 <PrivateRoute menuKey={['masters', 'masters.products']}>
                   <ProductPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="masters/products/:productId/tests"
+              element={
+                <PrivateRoute menuKey={['masters', 'masters.products']}>
+                  <ProductTestsPage />
                 </PrivateRoute>
               }
             />

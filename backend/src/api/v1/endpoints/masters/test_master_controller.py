@@ -66,7 +66,7 @@ async def create_test(
     try:
         dto = CreateTestMasterDTO(
             test_name=request.test_name,
-            no_of_samples_issued=request.no_of_samples_issued,
+            sample_description=request.sample_description,
             sample_qty=request.sample_qty,
             product_id=request.product_id,
             is_active=request.is_active,
@@ -95,7 +95,7 @@ async def update_test(
     try:
         dto = UpdateTestMasterDTO(
             test_name=request.test_name,
-            no_of_samples_issued=request.no_of_samples_issued,
+            sample_description=request.sample_description,
             sample_qty=request.sample_qty,
             product_id=request.product_id,
             is_active=request.is_active,

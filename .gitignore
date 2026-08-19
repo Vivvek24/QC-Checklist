@@ -124,3 +124,6 @@ pnpm-debug.log*
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+
+# ─── Database dumps (contain secrets) ───
+backend/scripts/*.sql

@@ -750,3 +750,193 @@ h2 {
   padding: 1.25rem;
   overflow-y: auto;
 }
+
+
+/* ─── QC Checklist Header — 3D Ribbon ─── */
+
+.qc-header {
+  position: relative;
+  margin-bottom: 0.75rem;
+}
+
+.qc-header-ribbon-wrap {
+  position: relative;
+}
+
+.qc-header-fold {
+  display: none;
+}
+
+.qc-header-fold-top {
+  display: none;
+}
+
+.qc-header-fold-bottom {
+  display: none;
+}
+
+.qc-header-ribbon {
+  background: #ffffff;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.qc-header-ribbon::after {
+  display: none;
+}
+
+.qc-header-ribbon-content {
+  display: none;
+}
+
+.qc-header-ribbon-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.qc-header-ribbon-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.qc-header-ribbon-right {
+  text-align: right;
+}
+
+.qc-header-company {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--color-primary);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.qc-header-location {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: #475569;
+  font-weight: 500;
+}
+
+.qc-header-location i {
+  font-size: 0.7rem !important;
+}
+
+.qc-header-format-name {
+  font-size: 0.9rem;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.qc-header-format-no {
+  font-size: 0.85rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.qc-header-info {
+  display: none;
+}
+
+/* ─── QC Checklist Card ─── */
+
+.qc-checklist-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e5e7eb;
+  width: 100%;
+  overflow: hidden;
+}
+
+.qc-checklist-stages {
+  padding: 1rem 1.25rem;
+}
+
+.qc-checklist-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbfc;
+}
+
+
+/* ─── RadioButton — compact, red when selected ─── */
+
+.p-radiobutton {
+  width: 1rem !important;
+  height: 1rem !important;
+}
+
+.p-radiobutton .p-radiobutton-box {
+  width: 1rem !important;
+  height: 1rem !important;
+  border-width: 1.5px !important;
+}
+
+.p-radiobutton .p-radiobutton-box .p-radiobutton-icon {
+  width: 0.5rem !important;
+  height: 0.5rem !important;
+}
+
+.p-radiobutton.p-highlight .p-radiobutton-box {
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary) !important;
+}
+
+.p-radiobutton:not(.p-disabled):has(.p-highlight) .p-radiobutton-box,
+.p-radiobutton .p-radiobutton-box.p-highlight {
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary) !important;
+}
+
+
+/* ─── Dropdown panel — constrain width to not exceed parent ─── */
+
+.p-dropdown-panel {
+  max-width: 400px !important;
+}
+
+.p-dropdown-panel .p-dropdown-item {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+}
+
+.p-dropdown .p-dropdown-label {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+
+/* ─── AQL Snip sub-question placeholder — lighter and smaller ─── */
+
+.aql-sub-input::placeholder {
+  color: #b0b8c4 !important;
+  font-size: 0.65rem !important;
+  font-style: italic;
+}
+
+
+/* ─── QC Checklist inline validation errors ─── */
+
+.qc-validation-error {
+  display: inline-block;
+  margin-top: 0.2rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-100);
+  border-radius: 4px;
+}

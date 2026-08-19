@@ -11,7 +11,7 @@ class TestMasterModel(BaseModel):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
     test_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    no_of_samples_issued: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sample_description: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     sample_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     product_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True

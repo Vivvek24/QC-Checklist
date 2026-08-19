@@ -12,6 +12,7 @@ export { StageQuestionMappingPage } from './pages/StageQuestionMappingPage';
 export { FormatStagesPage } from './pages/FormatStagesPage';
 export { FormatsViewPage } from './pages/FormatsViewPage';
 export { StageQuestionViewPage } from './pages/StageQuestionViewPage';
+export { ProductTestsPage } from './pages/ProductTestsPage';
 
 export { MasterCrudPage } from './components/MasterCrudPage';
 export { MasterRowActions } from './components/MasterRowActions';

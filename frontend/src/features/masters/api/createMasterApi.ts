@@ -38,7 +38,7 @@ export const createMasterApi = <
 ): MasterApi<TEntity, TCreate, TUpdate, TParams> => ({
   list: async (params?: TParams): Promise<MasterPage<TEntity>> => {
     const { data } = await apiClient.get<Record<string, unknown>>(basePath, {
-      params: { skip: 0, limit: 100, ...params },
+      params: { skip: 0, limit: 500, ...params },
     });
     // The only cast in the feature: the envelope key is dynamic, so it cannot be
     // expressed in the response type. Contained here instead of at every caller.

@@ -7,7 +7,7 @@ from datetime import datetime
 @dataclass(frozen=True)
 class CreateTestMasterDTO:
     test_name: str
-    no_of_samples_issued: int
+    sample_description: str
     sample_qty: int
     product_id: int
     is_active: bool = True
@@ -16,7 +16,7 @@ class CreateTestMasterDTO:
 @dataclass(frozen=True)
 class UpdateTestMasterDTO:
     test_name: str | None = None
-    no_of_samples_issued: int | None = None
+    sample_description: str | None = None
     sample_qty: int | None = None
     product_id: int | None = None
     is_active: bool | None = None
@@ -26,7 +26,7 @@ class UpdateTestMasterDTO:
 class TestMasterDTO:
     id: int
     test_name: str
-    no_of_samples_issued: int
+    sample_description: str
     sample_qty: int
     product_id: int
     is_active: bool

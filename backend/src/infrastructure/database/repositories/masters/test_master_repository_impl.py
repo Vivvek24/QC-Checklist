@@ -48,7 +48,7 @@ class TestMasterRepositoryImpl(SqlAlchemyRepository[TestMaster, TestMasterModel]
     async def create(self, entity: TestMaster) -> TestMaster:
         model = TestMasterModel(
             test_name=entity.test_name,
-            no_of_samples_issued=entity.no_of_samples_issued,
+            sample_description=entity.sample_description,
             sample_qty=entity.sample_qty,
             product_id=entity.product_id,
             is_active=entity.is_active,
@@ -62,7 +62,7 @@ class TestMasterRepositoryImpl(SqlAlchemyRepository[TestMaster, TestMasterModel]
     async def update(self, entity: TestMaster) -> TestMaster:
         model = await self._require_model(entity.id)
         model.test_name = entity.test_name
-        model.no_of_samples_issued = entity.no_of_samples_issued
+        model.sample_description = entity.sample_description
         model.sample_qty = entity.sample_qty
         model.product_id = entity.product_id
         model.is_active = entity.is_active
@@ -84,7 +84,7 @@ class TestMasterRepositoryImpl(SqlAlchemyRepository[TestMaster, TestMasterModel]
         return TestMaster(
             id=model.id,
             test_name=model.test_name,
-            no_of_samples_issued=model.no_of_samples_issued,
+            sample_description=model.sample_description,
             sample_qty=model.sample_qty,
             product_id=model.product_id,
             is_active=model.is_active,
