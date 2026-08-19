@@ -293,33 +293,16 @@ class SubmitStageService:
         # Get format info
         format_type = await self._get_format_type(cr.format_id)
 
-        # Step 2: Filter stages by format type
-        all_stages_result = await self._session.execute(
-            select(ChecklistStageModel).where(
-                ChecklistStageModel.checklist_request_id == cr.id
-            ).order_by(ChecklistStageModel.id)
-        )
-        all_stages = all_stages_result.scalars().all()
-
-        # Determine which statuses to filter by
-        if format_type == "ReconcilationSheet":
-            active_statuses = RECON_ACTIVE_STATUSES
-        else:
-            active_statuses = STANDARD_ACTIVE_STATUSES
-
-        filtered_stages = [s for s in all_stages if s.status in active_statuses]
-
-        # Step 3: Process each filtered stage
-        for stage in filtered_stages:
-            await self._process_stage_submit(stage, cr, user_id, role_id, remark_id, remark_text, format_type, now)
-
-        # Step 4: Update the specific submitted stage status
-        # The submitted stage (cs) itself gets Pending status
+        # Step 2: Update the submitted stage status to Pending
         cs.status = "Pending"
         cs.user_id = user_id
         cs.submit_remarks = remark_text
         cs.modified_by = str(user_id)
         cs.modified_date = now
+
+        # Record the submit action on the first unacted approval label mapping
+        # (For Basic Details this does nothing since it has no approval labels)
+        await self._record_approval_action(cs, user_id, role_id, remark_id, remark_text, now)
 
         # Update request status
         cr.status = "Pending"

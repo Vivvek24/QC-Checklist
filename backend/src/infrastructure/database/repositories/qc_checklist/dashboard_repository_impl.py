@@ -182,7 +182,7 @@ ORDER BY x.created_date DESC
             FROM checklist_stages cs
             WHERE cs.checklist_request_id = :rid
                 AND cs.status IN ('Pending', 'Draft', 'SaveAsDraft', 'ReferBack', 'Initial', 'Saved')
-            ORDER BY cs.created_date DESC
+            ORDER BY cs.id DESC
             LIMIT 1
         """), {"rid": request_id})
         return result.fetchone()
