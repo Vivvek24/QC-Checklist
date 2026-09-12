@@ -1,13 +1,24 @@
-"""UserDetails domain entity. One-to-one with User."""
+"""
+UserDetails domain entity.
+Stores additional employee information from Darwin AD service.
+One-to-one relationship with User entity (user.username == employee_id).
+"""
 
 from dataclasses import dataclass, field
+from uuid import UUID
 
 from src.domain.entities.base_entity import BaseEntity
 
 
 @dataclass
 class UserDetails(BaseEntity):
-    user_id: int | None = field(default=None)
+    """
+    UserDetails entity — holds all Darwin AD employee fields.
+
+    Linked to User via user_id (one-to-one).
+    """
+
+    user_id: UUID | None = field(default=None)
     employee_id: str = field(default="")
     employee_name: str = field(default="")
     first_name: str = field(default="")

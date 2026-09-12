@@ -3,6 +3,7 @@ Application settings using Pydantic BaseSettings.
 Loads configuration from environment variables and .env files.
 """
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -10,18 +11,16 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """QC-Checklist application configuration."""
+    """Enterprise application configuration."""
 
     # Application
-    APP_NAME: str = Field(
-        default="QC-Checklist", description="Application name"
-    )
+    APP_NAME: str = Field(default="Enterprise FastAPI", description="Application name")
     APP_VERSION: str = Field(default="1.0.0", description="Application version")
     DEBUG: bool = Field(default=False, description="Debug mode")
 
     # Database
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/compliance-management-system",
+        default="postgresql+asyncpg://postgres:postgres@localhost:5432/enterprise_db",
         description="Async database connection string",
     )
     DB_POOL_SIZE: int = Field(default=20, description="Database connection pool size")
@@ -48,10 +47,27 @@ class Settings(BaseSettings):
         default=7, description="Refresh token expiry in days"
     )
 
+    # File storage
+    UPLOAD_DIR: str = Field(
+        default="storage",
+        description=(
+            "Base directory for everything the application writes to disk. "
+            "Relative LOG_FILE_PATH values are resolved beneath it (see the "
+            "`log_file` property). In deployment this points at the mounted "
+            "storage volume. A relative value is taken from the process working "
+            "directory."
+        ),
+    )
+
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
     LOG_FILE_PATH: str = Field(
-        default="logs/application.log", description="Log file path"
+        default="logs/application.log",
+        description=(
+            "Log file path. Relative values are resolved beneath UPLOAD_DIR; "
+            "an absolute value is used verbatim. Read it through the `log_file` "
+            "property rather than directly."
+        ),
     )
     LOG_MAX_BYTES: int = Field(
         default=10 * 1024 * 1024, description="Max log file size (10MB)"
@@ -73,7 +89,7 @@ class Settings(BaseSettings):
         default="http://localhost:4317", description="OpenTelemetry exporter endpoint"
     )
     OTEL_SERVICE_NAME: str = Field(
-        default="compliance-api", description="OpenTelemetry service name"
+        default="enterprise-api", description="OpenTelemetry service name"
     )
 
     # Azure AD / Microsoft SSO
@@ -81,7 +97,7 @@ class Settings(BaseSettings):
     AZURE_CLIENT_SECRET: str = Field(default="", description="Azure App Registration client secret")
     AZURE_TENANT_ID: str = Field(default="", description="Azure AD tenant ID")
     AZURE_REDIRECT_URI: str = Field(
-        default="http://localhost:6769/auth/microsoft/callback",
+        default="http://localhost:3000/auth/microsoft/callback",
         description="OAuth2 redirect URI (must match Azure App Registration)",
     )
 
@@ -91,11 +107,100 @@ class Settings(BaseSettings):
         description="Base URL for the Darwin AD integrator service",
     )
 
+    # Published Darwin AD service (this app publishing the migrated endpoints).
+    # When set, consuming apps must send this value in the 'X-API-Key' header.
+    # When left empty, the published endpoints are open (drop-in compatible).
+    DARWIN_PUBLISHED_API_KEY: str = Field(
+        default="",
+        description="Optional shared secret for the published Darwin AD endpoints",
+    )
+    # Mirrors the Mendix 'ActiveCheckForHierarchyData' constant: when True the
+    # hierarchy is built only from employees with employee_status = 'Active'.
+    DARWIN_HIERARCHY_ACTIVE_CHECK: bool = Field(
+        default=True,
+        description="Restrict getHierarchyData to Active employees only",
+    )
+    # Shared Fernet key for the published /validatecredentials endpoint. Consuming
+    # apps encrypt the username and password with this key; this service decrypts
+    # them before the LDAP bind. A urlsafe-base64 32-byte key (Fernet.generate_key()).
+    # Left empty, the endpoint accepts plaintext, preserving drop-in compatibility —
+    # same opt-in pattern as DARWIN_PUBLISHED_API_KEY. Set it to require encryption.
+    DARWIN_VALIDATE_ENCRYPTION_KEY: str = Field(
+        default="",
+        description="Shared Fernet key for encrypting validatecredentials inputs",
+    )
 
+    # Darwinbox Master API (employee sync)
+    DARWINBOX_BASE_URL: str = Field(
+        default="https://emcure.darwinbox.in/masterapi/employee",
+        description="Base URL for the Darwinbox master employee API",
+    )
+    DARWINBOX_USERNAME: str = Field(
+        default="", description="Basic-auth username for the Darwinbox master API"
+    )
+    DARWINBOX_PASSWORD: str = Field(
+        default="", description="Basic-auth password for the Darwinbox master API"
+    )
+    DARWINBOX_API_KEY: str = Field(
+        default="", description="Darwinbox master API 'api_key' for the ACTIVE dataset"
+    )
+    DARWINBOX_DATASET_KEY: str = Field(
+        default="", description="Darwinbox master API 'datasetKey' for the ACTIVE dataset"
+    )
+
+    # Darwinbox — INACTIVE employee dataset (same URL, different credentials/keys)
+    DARWINBOX_INACTIVE_USERNAME: str = Field(
+        default="", description="Basic-auth username for the Darwinbox INACTIVE dataset"
+    )
+    DARWINBOX_INACTIVE_PASSWORD: str = Field(
+        default="", description="Basic-auth password for the Darwinbox INACTIVE dataset"
+    )
+    DARWINBOX_INACTIVE_API_KEY: str = Field(
+        default="", description="Darwinbox master API 'api_key' for the INACTIVE dataset"
+    )
+    DARWINBOX_INACTIVE_DATASET_KEY: str = Field(
+        default="", description="Darwinbox master API 'datasetKey' for the INACTIVE dataset"
+    )
+
+    # E-Signer Service
+    ESIGNER_BASE_URL: str = Field(
+        default="",
+        description="Base URL for the E-Signer service",
+    )
+    ESIGNER_USERNAME: str = Field(
+        default="", description="Username for the E-Signer service"
+    )
+    ESIGNER_PASSWORD: str = Field(
+        default="", description="Password for the E-Signer service"
+    )
+    ESIGNER_EMAIL: str = Field(
+        default="", description="Account email for the E-Signer service"
+    )
+    ESIGNER_APP_NAME: str = Field(
+        default="", description="E-Signer 'AppName' sent as a request header"
+    )
+    ESIGNER_SECRET_KEY: str = Field(
+        default="", description="E-Signer 'SecretKey' sent as a request header"
+    )
+    ESIGNER_TEMP_PASSWORD: str = Field(
+        default="",
+        description=(
+            "Temporary password used to rotate the E-Signer account password "
+            "(change to this, then back to ESIGNER_PASSWORD)"
+        ),
+    )
+    # Published E-Signer service (this app publishing the endpoints consumed by
+    # other applications, e.g. Catalyst). When set, consuming apps must send
+    # this value in the 'X-API-Key' header. When left empty, the published
+    # endpoints are open (drop-in compatible with the legacy service).
+    ESIGNER_PUBLISHED_API_KEY: str = Field(
+        default="",
+        description="Optional shared secret for the published E-Signer endpoints",
+    )
 
     # CORS
     CORS_ORIGINS: list[str] = Field(
-        default=["http://localhost:6769"], description="Allowed CORS origins"
+        default=["http://localhost:3000"], description="Allowed CORS origins"
     )
 
     # ─── Auth Cookies (refresh token) ───
@@ -110,13 +215,12 @@ class Settings(BaseSettings):
         default=False,
         description="Send cookies only over HTTPS. Set True in production.",
     )
+    # Literal, not str: Starlette's `set_cookie` accepts only these three values,
+    # so typing it here makes Pydantic reject a bad env value at startup rather
+    # than letting a typo reach the cookie header at request time.
     COOKIE_SAMESITE: Literal["lax", "strict", "none"] = Field(
         default="lax",
-        description=(
-            "SameSite policy for auth cookies. Typed as a literal so an invalid "
-            "value in .env fails at startup instead of silently producing a "
-            "malformed Set-Cookie header."
-        ),
+        description="SameSite policy for auth cookies: 'lax', 'strict', or 'none'",
     )
     COOKIE_DOMAIN: str = Field(
         default="",
@@ -128,6 +232,32 @@ class Settings(BaseSettings):
         "env_file_encoding": "utf-8",
         "case_sensitive": True,
     }
+
+    # ─── Derived paths ───
+    #
+    # Exposed as properties rather than fields so there is a single place that
+    # decides how UPLOAD_DIR and LOG_FILE_PATH combine. Callers should use these
+    # instead of joining the raw strings themselves.
+
+    @property
+    def storage_root(self) -> Path:
+        """UPLOAD_DIR as an absolute path. Not created here — writers do that."""
+        return Path(self.UPLOAD_DIR).expanduser().resolve()
+
+    @property
+    def log_file(self) -> Path:
+        """
+        Absolute path of the application log file.
+
+        A relative LOG_FILE_PATH lands beneath UPLOAD_DIR, so everything the app
+        writes shares one configured root. An absolute LOG_FILE_PATH wins, which
+        keeps container deployments that mount a dedicated log volume working
+        without also having to move UPLOAD_DIR.
+        """
+        configured = Path(self.LOG_FILE_PATH).expanduser()
+        if configured.is_absolute():
+            return configured
+        return self.storage_root / configured
 
 
 # Singleton settings instance

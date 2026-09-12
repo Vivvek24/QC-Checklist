@@ -54,6 +54,16 @@ export interface RoleAssignRequest {
   tenant_id?: string;
 }
 
+/** Mirrors the backend's `RoleAssignmentResponse` (rbac_schema.py). */
+export interface RoleAssignment {
+  id: string;
+  user_id: string;
+  role_id: string;
+  tenant_id: string | null;
+  is_active: boolean;
+  created_date: string;
+}
+
 export interface PermissionGrantRequest {
   role_id: string;
   permission_id: string;

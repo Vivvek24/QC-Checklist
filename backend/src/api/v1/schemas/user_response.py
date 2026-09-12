@@ -1,12 +1,18 @@
-"""User response schemas (Pydantic v2). Never exposes password_hash."""
+"""
+User response schemas (Pydantic v2).
+Never exposes password_hash.
+"""
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 
 class UserResponse(BaseModel):
-    id: int
+    """User response with employee details."""
+
+    id: UUID
     username: str
     is_active: bool
     is_blocked: bool
@@ -22,7 +28,9 @@ class UserResponse(BaseModel):
 
 
 class UserDetailResponse(BaseModel):
-    id: int
+    """Full user details (all fields from user_details table)."""
+
+    id: UUID
     username: str
     is_active: bool
     is_blocked: bool
@@ -58,6 +66,8 @@ class UserDetailResponse(BaseModel):
 
 
 class UserListResponse(BaseModel):
+    """Paginated user list response."""
+
     users: list[UserResponse]
     total: int = Field(default=0)
     skip: int = Field(default=0)

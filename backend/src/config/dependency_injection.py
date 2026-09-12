@@ -6,7 +6,13 @@ Used for overriding dependencies in tests and different environments.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.repositories.darwinbox_employee_repository import (
+    IDarwinboxEmployeeRepository,
+)
 from src.domain.repositories.user_repository import IUserRepository
+from src.infrastructure.database.repositories.darwinbox_employee_repository_impl import (
+    DarwinboxEmployeeRepositoryImpl,
+)
 from src.infrastructure.database.repositories.user_repository_impl import (
     UserRepositoryImpl,
 )
@@ -27,6 +33,12 @@ class Container:
     @staticmethod
     def get_user_repository(session: AsyncSession) -> IUserRepository:
         return UserRepositoryImpl(session)
+
+    @staticmethod
+    def get_darwinbox_employee_repository(
+        session: AsyncSession,
+    ) -> IDarwinboxEmployeeRepository:
+        return DarwinboxEmployeeRepositoryImpl(session)
 
     @staticmethod
     def get_auth_manager(

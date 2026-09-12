@@ -7,9 +7,13 @@ Captures audit trail for all authentication events.
 from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.v1.dependencies import get_auth_manager, get_current_active_user, get_user_repository
+from src.api.v1.dependencies import (
+    get_audit_service,
+    get_auth_manager,
+    get_current_active_user,
+    get_user_repository,
+)
 from src.api.v1.schemas.auth_schema import (
     LoginRequest,
     TokenResponse,
@@ -18,7 +22,6 @@ from src.common.decorators.log_execution import log_execution
 from src.config.settings import settings
 from src.domain.entities.user import User
 from src.domain.repositories.user_repository import IUserRepository
-from src.infrastructure.database.session import get_db_session
 from src.infrastructure.security.audit_service import AuditService
 from src.infrastructure.security.auth_manager import (
     AuthenticationError,
@@ -61,12 +64,33 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    """Remove the refresh token cookie (used on logout)."""
+    """Remove the refresh token cookie (used on logout, which returns normally)."""
     response.delete_cookie(
         key=settings.REFRESH_COOKIE_NAME,
         path=settings.REFRESH_COOKIE_PATH,
         domain=settings.COOKIE_DOMAIN or None,
     )
+
+
+def _refresh_cookie_clear_headers() -> dict[str, str]:
+    """
+    Build the ``Set-Cookie`` header that clears the refresh cookie.
+
+    Raising an ``HTTPException`` discards any mutation already made to the
+    ``Response`` object injected via ``Depends()``: FastAPI's exception
+    handling builds a brand-new response from ``HTTPException.headers``
+    only, so a prior ``response.delete_cookie(...)`` call on the injected
+    ``Response`` never reaches the client once the handler raises instead
+    of returning. Attaching the header to the exception itself is the only
+    way to make the deletion take effect on an error response.
+    """
+    scratch = Response()
+    scratch.delete_cookie(
+        key=settings.REFRESH_COOKIE_NAME,
+        path=settings.REFRESH_COOKIE_PATH,
+        domain=settings.COOKIE_DOMAIN or None,
+    )
+    return {"set-cookie": scratch.headers["set-cookie"]}
 
 
 @router.post(
@@ -83,10 +107,10 @@ async def login(
     http_request: Request,
     response: Response,
     auth_manager: AuthManager = Depends(get_auth_manager),
-    session: AsyncSession = Depends(get_db_session),
+    user_repo: IUserRepository = Depends(get_user_repository),
+    audit: AuditService = Depends(get_audit_service),
 ) -> TokenResponse:
     """POST /api/v1/auth/login — Authenticates and logs the event."""
-    audit = AuditService(session)
     ip = _get_client_ip(http_request)
     user_agent = http_request.headers.get("user-agent", "")
 
@@ -115,8 +139,6 @@ async def login(
         raise HTTPException(status_code=e.status_code, detail=e.message) from e
 
     # Log successful login
-    from src.infrastructure.database.repositories.user_repository_impl import UserRepositoryImpl
-    user_repo = UserRepositoryImpl(session)
     user = await user_repo.get_by_username(request.username)
     if user:
         await audit.log_login(
@@ -144,10 +166,9 @@ async def logout(
     http_request: Request,
     response: Response,
     current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_db_session),
+    audit: AuditService = Depends(get_audit_service),
 ) -> dict[str, Any]:
     """POST /api/v1/auth/logout — Records logout in audit trail and clears the refresh cookie."""
-    audit = AuditService(session)
     ip = _get_client_ip(http_request)
     user_agent = http_request.headers.get("user-agent", "")
 
@@ -176,7 +197,6 @@ async def logout(
 )
 @log_execution
 async def refresh_token(
-    response: Response,
     refresh_token: str | None = Cookie(default=None, alias=settings.REFRESH_COOKIE_NAME),
     auth_manager: AuthManager = Depends(get_auth_manager),
 ) -> TokenResponse:
@@ -200,9 +220,15 @@ async def refresh_token(
     try:
         result = await auth_manager.refresh(refresh_token=refresh_token)
     except AuthenticationError as e:
-        # Token is unusable — clear the stale cookie so the client stops retrying.
-        _clear_refresh_cookie(response)
-        raise HTTPException(status_code=e.status_code, detail=e.message) from e
+        # Token is unusable — clear the stale cookie so the client stops
+        # retrying with it. Attached to the exception itself (see
+        # `_refresh_cookie_clear_headers`) since this response never returns
+        # normally, and a mutation of the injected `Response` would be dropped.
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.message,
+            headers=_refresh_cookie_clear_headers(),
+        ) from e
 
     return TokenResponse(
         access_token=result.access_token,
@@ -284,7 +310,7 @@ async def microsoft_callback(
         501: Azure SSO not configured
     """
     import secrets
-    from int import uuid4
+    from uuid import uuid4
 
     from src.infrastructure.external.azure_sso import (
         AzureAuthError,
@@ -318,7 +344,9 @@ async def microsoft_callback(
             detail="Failed to obtain access token from Microsoft",
         ) from exc
     except AzureAuthError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail
+        ) from exc
     except AzureUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -348,6 +376,10 @@ async def microsoft_callback(
             password_hash=hash_password(secrets.token_urlsafe(32)),
             is_active=True,
             is_blocked=False,
+            # No `role`: the column was dropped from users (migration
+            # c9d4e2f5a1b7) in favour of role_assignments, and User has had no
+            # such field since. Passing it raised TypeError here, so every
+            # first-time SSO login returned 500.
             created_by="microsoft_sso",
             modified_by="microsoft_sso",
         )
@@ -376,4 +408,3 @@ async def microsoft_callback(
         token_type="Bearer",
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
-

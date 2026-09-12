@@ -1,21 +1,32 @@
-"""Pydantic schemas for RBAC API endpoints."""
+"""
+Pydantic schemas for RBAC API endpoints.
+"""
 
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+# ─── Permission Schemas ───
+
 
 class PermissionCreate(BaseModel):
-    code: str = Field(..., min_length=3, max_length=100)
+    """Create a new permission."""
+
+    code: str = Field(..., min_length=3, max_length=100, examples=["users.create"])
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="")
     scope: str = Field(..., pattern="^(MENU|API|FIELD)$")
     resource: str = Field(..., min_length=1, max_length=255)
-    action: str = Field(..., pattern="^(CREATE|READ|UPDATE|DELETE|EXECUTE|EXPORT|IMPORT|APPROVE)$")
+    action: str = Field(
+        ..., pattern="^(CREATE|READ|UPDATE|DELETE|EXECUTE|EXPORT|IMPORT|APPROVE)$"
+    )
 
 
 class PermissionResponse(BaseModel):
-    id: int
+    """Permission read response."""
+
+    id: UUID
     code: str
     name: str
     description: str
@@ -28,30 +39,39 @@ class PermissionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─── Role Schemas ───
+
+
 class RoleCreate(BaseModel):
+    """Create a new role."""
+
     code: str = Field(..., min_length=2, max_length=50)
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="")
-    tenant_id: int | None = Field(default=None)
-    parent_role_id: int | None = Field(default=None)
+    tenant_id: UUID | None = Field(default=None)
+    parent_role_id: UUID | None = Field(default=None)
 
 
 class RoleUpdate(BaseModel):
+    """Update an existing role."""
+
     name: str | None = Field(default=None, max_length=255)
     description: str | None = Field(default=None)
     is_active: bool | None = Field(default=None)
-    parent_role_id: int | None = Field(default=None)
+    parent_role_id: UUID | None = Field(default=None)
 
 
 class RoleResponse(BaseModel):
-    id: int
+    """Role read response."""
+
+    id: UUID
     code: str
     name: str
     description: str
     is_system: bool
     is_active: bool
-    tenant_id: int | None
-    parent_role_id: int | None
+    tenant_id: UUID | None
+    parent_role_id: UUID | None
     permissions: list[PermissionResponse] = []
     created_date: datetime
     modified_date: datetime
@@ -60,67 +80,94 @@ class RoleResponse(BaseModel):
 
 
 class RoleListResponse(BaseModel):
+    """Paginated list of roles."""
+
     roles: list[RoleResponse]
     total: int
 
 
+# ─── Role Assignment Schemas ───
+
+
 class RoleAssignRequest(BaseModel):
-    user_id: int
-    role_id: int
-    tenant_id: int | None = Field(default=None)
+    """Assign a role to a user."""
+
+    user_id: UUID
+    role_id: UUID
+    tenant_id: UUID | None = Field(default=None)
 
 
 class RoleRevokeRequest(BaseModel):
-    user_id: int
-    role_id: int
-    tenant_id: int | None = Field(default=None)
+    """Revoke a role from a user."""
+
+    user_id: UUID
+    role_id: UUID
+    tenant_id: UUID | None = Field(default=None)
 
 
 class RoleAssignmentResponse(BaseModel):
-    id: int
-    user_id: int
-    role_id: int
-    tenant_id: int | None
+    """Role assignment read response."""
+
+    id: UUID
+    user_id: UUID
+    role_id: UUID
+    tenant_id: UUID | None
     is_active: bool
     created_date: datetime
 
     model_config = {"from_attributes": True}
 
 
+# ─── Permission Grant Schemas ───
+
+
 class PermissionGrantRequest(BaseModel):
-    role_id: int
-    permission_id: int
+    """Grant a permission to a role."""
+
+    role_id: UUID
+    permission_id: UUID
 
 
 class PermissionRevokeRequest(BaseModel):
-    role_id: int
-    permission_id: int
+    """Revoke a permission from a role."""
+
+    role_id: UUID
+    permission_id: UUID
+
+
+# ─── Menu Permissions Response ───
 
 
 class MenuPermissionsResponse(BaseModel):
+    """User's menu access permissions for frontend consumption."""
+
     menu_keys: list[str]
     permissions: list[PermissionResponse]
 
 
-class ApiPermissionsResponse(BaseModel):
-    codes: list[str]
-    resource_actions: dict[str, list[str]]
-    permissions: list[PermissionResponse]
+# ─── Field Permissions Response ───
 
 
 class FieldPermissionsResponse(BaseModel):
+    """Field-level permissions for a specific resource."""
+
     resource: str
-    fields: dict[str, list[str]]
+    fields: dict[str, list[str]]  # field_name → [allowed_actions]
+
+
+# ─── Audit Log Schemas ───
 
 
 class AuditLogResponse(BaseModel):
-    id: int
-    actor_id: int | None
+    """Audit log entry response."""
+
+    id: UUID
+    actor_id: UUID | None
     actor_username: str
     action: str
     resource_type: str
     resource_id: str
-    tenant_id: int | None
+    tenant_id: UUID | None
     old_value: str | None
     new_value: str | None
     ip_address: str
@@ -132,6 +179,8 @@ class AuditLogResponse(BaseModel):
 
 
 class AuditLogListResponse(BaseModel):
+    """Paginated audit logs."""
+
     logs: list[AuditLogResponse]
     total: int
     skip: int

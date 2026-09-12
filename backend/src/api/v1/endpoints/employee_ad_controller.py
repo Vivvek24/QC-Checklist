@@ -49,12 +49,19 @@ class GetSelectedEmployeesRequest(BaseModel):
 
 
 def _raise_for_darwin_error(exc: EmployeeADError) -> NoReturn:
-    """Map Darwin client exceptions to HTTP responses."""
+    """
+    Map Darwin client exceptions to HTTP responses.
+
+    Declared `NoReturn`, not `None`: every branch raises. With `None`, mypy treats
+    a caller's `except EmployeeADError: _raise_for_darwin_error(exc)` as falling
+    off the end of the function and reports a missing return on every endpoint —
+    which hides the fact that a genuine fall-through would look identical.
+    """
     if isinstance(exc, EmployeeADAuthError):
-        raise HTTPException(status_code=401, detail=exc.detail)
+        raise HTTPException(status_code=401, detail=exc.detail) from exc
     if isinstance(exc, EmployeeADUnavailableError):
-        raise HTTPException(status_code=503, detail=exc.detail)
-    raise HTTPException(status_code=502, detail=exc.detail)
+        raise HTTPException(status_code=503, detail=exc.detail) from exc
+    raise HTTPException(status_code=502, detail=exc.detail) from exc
 
 
 @router.get("/health", summary="Check Employee AD service reachability")
@@ -72,9 +79,7 @@ async def check_health() -> dict[str, Any]:
 
 
 @router.post("/validate-credentials", summary="Validate employee AD credentials")
-async def validate_credentials(
-    request: ValidateCredentialsRequest,
-) -> dict[str, Any]:
+async def validate_credentials(request: ValidateCredentialsRequest) -> dict[str, Any]:
     """
     POST /validatecredentials — Validate employee AD credentials via Darwin.
     """
@@ -93,9 +98,7 @@ async def validate_credentials(
 
 
 @router.post("/selected-employees", summary="Get selected employees by IDs")
-async def get_selected_employees(
-    request: GetSelectedEmployeesRequest,
-) -> dict[str, Any]:
+async def get_selected_employees(request: GetSelectedEmployeesRequest) -> dict[str, Any]:
     """
     POST /getselectedemployees — Fetch employee records by IDs (multipart/form-data to Darwin).
     """
@@ -128,4 +131,3 @@ async def get_hierarchy_data() -> dict[str, Any]:
         return data
     except EmployeeADError as exc:
         _raise_for_darwin_error(exc)
-

@@ -11,11 +11,16 @@
  *     browser session.
  */
 
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { authApi } from '../api/authApi';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+
 import { fetchMenuPermissions, clearRbac } from '@core/rbac';
+
 import { sessionBus } from '@shared/services/sessionBus';
 import { sessionCache } from '@shared/services/sessionCache';
+import { extractApiError } from '@shared/utils/apiError';
+
+import { authApi } from '../api/authApi';
 import type { AuthState, CurrentUser, LoginRequest } from '../models/auth.types';
 
 // Hydrate optimistically from the cached session snapshot so a remount/reload
@@ -45,12 +50,11 @@ export const loginThunk = createAsyncThunk(
       // Tell other tabs to converge on this (possibly new) identity.
       sessionBus.broadcastLogin();
       return user;
-    } catch (error: any) {
-      const message =
-        error.response?.data?.detail || 'Login failed. Please try again.';
+    } catch (error) {
+      const message = extractApiError(error, 'Login failed. Please try again.');
       return rejectWithValue(message);
     }
-  }
+  },
 );
 
 export const fetchCurrentUser = createAsyncThunk(
@@ -66,7 +70,7 @@ export const fetchCurrentUser = createAsyncThunk(
     } catch {
       return rejectWithValue('Session expired');
     }
-  }
+  },
 );
 
 /**
@@ -87,21 +91,18 @@ export const bootstrapSession = createAsyncThunk(
     } catch {
       return rejectWithValue('No active session');
     }
-  }
+  },
 );
 
 /**
  * Full logout initiated by THIS tab: clears the server cookie, local state, RBAC,
  * and notifies other tabs.
  */
-export const logoutThunk = createAsyncThunk(
-  'auth/logout',
-  async (_, { dispatch }) => {
-    await authApi.logout();
-    dispatch(clearRbac());
-    sessionBus.broadcastLogout();
-  }
-);
+export const logoutThunk = createAsyncThunk('auth/logout', async (_, { dispatch }) => {
+  await authApi.logout();
+  dispatch(clearRbac());
+  sessionBus.broadcastLogout();
+});
 
 const authSlice = createSlice({
   name: 'auth',

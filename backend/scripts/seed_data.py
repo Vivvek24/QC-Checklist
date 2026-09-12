@@ -1,21 +1,27 @@
 """
-Database seed script. Creates initial admin user.
-Usage: python -m scripts.seed_data
+Database seed script.
+Creates initial admin user for development/testing.
+
+Usage:
+    python -m scripts.seed_data
 """
 
 import asyncio
-
-from sqlalchemy import select
+from uuid import uuid4
 
 from src.infrastructure.database.models.user_model import UserModel
-from src.infrastructure.database.unit_of_work import UnitOfWork
+from src.infrastructure.database.session import async_session_factory
 from src.infrastructure.security.password_encoder import hash_password
 
 
 async def seed_admin_user() -> None:
-    async with UnitOfWork() as uow:
-        stmt = select(UserModel).where(UserModel.username == "MxAdmin")
-        result = await uow.session.execute(stmt)
+    """Create default admin user if not exists."""
+    async with async_session_factory() as session:
+        # Check if admin exists
+        from sqlalchemy import select
+
+        stmt = select(UserModel).where(UserModel.username == "admin")
+        result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -23,17 +29,18 @@ async def seed_admin_user() -> None:
             return
 
         admin = UserModel(
-            username="MxAdmin",
-            password_hash=hash_password("1234"),
+            id=uuid4(),
+            username="admin",
+            password_hash=hash_password("Admin@123!"),
             is_active=True,
             is_blocked=False,
             is_validate_ad=False,
             created_by="seed_script",
             modified_by="seed_script",
         )
-        uow.session.add(admin)
-        await uow.commit()
-        print(f"Admin user created: username=MxAdmin, id={admin.id}")
+        session.add(admin)
+        await session.commit()
+        print(f"Admin user created: username=admin, id={admin.id}")
 
 
 if __name__ == "__main__":

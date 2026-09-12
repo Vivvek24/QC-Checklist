@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, NoReturn
+from typing import Any
 
 import httpx
 
@@ -73,9 +73,7 @@ class EmployeeADClient:
         """True when the base URL is set."""
         return bool(self._base_url)
 
-    def _handle_http_error(
-        self, exc: httpx.HTTPStatusError, context: str
-    ) -> NoReturn:
+    def _handle_http_error(self, exc: httpx.HTTPStatusError, context: str) -> None:
         """Raise appropriate exception based on HTTP status code."""
         detail = f"{context}: {exc.response.status_code} - {exc.response.text[:200]}"
         logger.error(detail)
@@ -147,13 +145,12 @@ class EmployeeADClient:
                 )
         except httpx.HTTPStatusError as exc:
             self._handle_http_error(exc, "Darwin validatecredentials error")
+            raise  # unreachable but satisfies type checker
         except httpx.RequestError as exc:
             logger.error("Darwin API connection error: %s", exc)
             raise EmployeeADUnavailableError(str(exc)) from exc
 
-    async def get_selected_employees(
-        self, employee_ids: list[str]
-    ) -> dict[str, Any]:
+    async def get_selected_employees(self, employee_ids: list[str]) -> dict[str, Any]:
         """
         POST multipart/form-data to /getselectedemployees.
 
@@ -177,10 +174,13 @@ class EmployeeADClient:
                     headers={"accept": "application/json"},
                 )
                 response.raise_for_status()
-                data: dict[str, Any] = response.json()
-                return data
+                # httpx types .json() as Any; bind it to the declared shape so the
+                # method's return annotation is actually enforced by the checker.
+                payload: dict[str, Any] = response.json()
+                return payload
         except httpx.HTTPStatusError as exc:
             self._handle_http_error(exc, "Darwin getselectedemployees error")
+            raise
         except httpx.RequestError as exc:
             logger.error("Darwin API connection error: %s", exc)
             raise EmployeeADUnavailableError(str(exc)) from exc
@@ -207,10 +207,11 @@ class EmployeeADClient:
                     headers={"accept": "application/json"},
                 )
                 response.raise_for_status()
-                data: dict[str, Any] = response.json()
-                return data
+                payload: dict[str, Any] = response.json()
+                return payload
         except httpx.HTTPStatusError as exc:
             self._handle_http_error(exc, "Darwin getemployees error")
+            raise
         except httpx.RequestError as exc:
             logger.error("Darwin API connection error: %s", exc)
             raise EmployeeADUnavailableError(str(exc)) from exc
@@ -237,10 +238,11 @@ class EmployeeADClient:
                     headers={"accept": "application/json"},
                 )
                 response.raise_for_status()
-                data: dict[str, Any] = response.json()
-                return data
+                payload: dict[str, Any] = response.json()
+                return payload
         except httpx.HTTPStatusError as exc:
             self._handle_http_error(exc, "Darwin getHierarchyData error")
+            raise
         except httpx.RequestError as exc:
             logger.error("Darwin API connection error: %s", exc)
             raise EmployeeADUnavailableError(str(exc)) from exc

@@ -15,6 +15,10 @@ from src.api.middleware.audit_context_middleware import AuditContextMiddleware
 from src.api.middleware.correlation_id import CorrelationIdMiddleware
 from src.api.middleware.exception_handler import ExceptionHandlerMiddleware
 from src.api.middleware.request_logging import RequestLoggingMiddleware
+from src.api.v1.endpoints.darwin_ad_controller import router as darwin_ad_router
+from src.api.v1.endpoints.esigner_published_controller import (
+    router as esigner_published_router,
+)
 from src.api.v1.router import api_v1_router
 from src.config.logging_config import configure_file_logging
 from src.config.settings import settings
@@ -34,18 +38,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description=(
-        "QC-Checklist API — enterprise-grade "
-        "FastAPI with Clean Architecture"
-    ),
+    description="Enterprise-grade FastAPI application with Clean Architecture",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
 )
 
 # ─── OpenAPI Security Scheme (enables Swagger Authorize button) ───
-
-
 def custom_openapi() -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
@@ -72,8 +71,8 @@ def custom_openapi() -> dict[str, Any]:
     return app.openapi_schema
 
 
-# Overriding the bound method is the documented way to customise FastAPI's
-# schema; mypy flags method assignment, so the override is narrowly silenced.
+# Overriding the bound method is FastAPI's documented way to customise the
+# schema; mypy flags any method assignment, so the ignore is scoped to this line.
 app.openapi = custom_openapi  # type: ignore[method-assign]
 
 # ─── Middleware (order matters: outermost first) ───
@@ -91,6 +90,12 @@ app.add_middleware(
 
 # ─── Routers ───
 app.include_router(api_v1_router)
+# Published Darwin AD service — mounted at the legacy Mendix base path so
+# consuming apps only change the host, not the endpoint paths.
+app.include_router(darwin_ad_router)
+# Published E-Signer service — mounted at the legacy base path so consuming
+# apps (e.g. Catalyst) only change the host, not the endpoint paths.
+app.include_router(esigner_published_router)
 
 
 @app.get("/", tags=["Root"])

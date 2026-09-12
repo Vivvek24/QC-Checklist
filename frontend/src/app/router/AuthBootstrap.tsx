@@ -12,14 +12,16 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { ProgressSpinner } from 'primereact/progressspinner';
+import { useNavigate } from 'react-router-dom';
+
 import { useAppDispatch } from '@app/store';
-import {
-  bootstrapSession,
-  sessionCleared,
-} from '@features/authentication/store/authSlice';
+
 import { clearRbac } from '@core/rbac';
+
+import { bootstrapSession, sessionCleared } from '@features/authentication/store/authSlice';
+
 import { setSessionExpiredHandler } from '@shared/services/apiClient';
 import { sessionBus } from '@shared/services/sessionBus';
 import { sessionCache } from '@shared/services/sessionCache';
@@ -74,7 +76,6 @@ export const AuthBootstrap = ({ children }: AuthBootstrapProps) => {
       active = false;
       unsubscribe();
     };
-    // eslint-disable-line react-hooks/exhaustive-deps
   }, [dispatch, navigate]);
 
   if (!ready) {

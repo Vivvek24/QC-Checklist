@@ -40,14 +40,14 @@ https://ad-prod-darwinsvc-prod.apps.emart.oneemcure.local/rest-doc/adintegrators
 │  │ → GET  /api/v1/services/employee-ad/health                    │  │
 │  └────────────────────────────────────────────────┬──────────────┘  │
 └───────────────────────────────────────────────────┼─────────────────┘
-                                                    │ Vite proxy /api → :8000
+                                                    │ Vite proxy /api → :8123
 ┌───────────────────────────────────────────────────▼─────────────────┐
 │  Backend (FastAPI)                                                   │
 │                                                                     │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │ API Layer: employee_ad_controller.py                          │   │
 │  │ Router prefix: /api/v1/services/employee-ad                   │   │
-│  │ Dependencies: [require_permission("services.employee_ad")]    │   │
+│  │ Dependencies: [require_role("ADMIN")]                         │   │
 │  └──────────────────────────────────────────┬───────────────────┘   │
 │                                             │                       │
 │  ┌──────────────────────────────────────────▼───────────────────┐   │
@@ -254,7 +254,7 @@ Uses the shared `apiClient` (Axios instance at `/api/v1`) which:
 |-------|-----------|
 | Frontend Route | `<PrivateRoute requiredRole="ADMIN">` |
 | Frontend Menu | `visible: user?.role === 'ADMIN'` |
-| Backend Router | `dependencies=[Depends(require_permission("services.employee_ad"))]` |
+| Backend Router | `dependencies=[Depends(require_role("ADMIN"))]` |
 | Transport to Darwin | HTTPS with `verify=False` (internal CA) |
 
 Non-ADMIN users:

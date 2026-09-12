@@ -7,6 +7,7 @@ Designed to be non-blocking — audit failures do not break business flows.
 import json
 import logging
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,12 +32,12 @@ class AuditService:
     async def log(
         self,
         *,
-        actor_id: int | None = None,
+        actor_id: UUID | None = None,
         actor_username: str = "system",
         action: str | AuditAction,
         resource_type: str,
         resource_id: str = "",
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
         old_value: dict[str, Any] | None = None,
         new_value: dict[str, Any] | None = None,
         ip_address: str = "",
@@ -51,12 +52,12 @@ class AuditService:
         """
         try:
             entry = AuditLogModel(
-                actor_id=actor_id,
+                actor_id=str(actor_id) if actor_id else None,
                 actor_username=actor_username,
                 action=str(action),
                 resource_type=resource_type,
                 resource_id=str(resource_id),
-                tenant_id=tenant_id,
+                tenant_id=str(tenant_id) if tenant_id else None,
                 old_value=json.dumps(old_value) if old_value else None,
                 new_value=json.dumps(new_value) if new_value else None,
                 ip_address=ip_address,
@@ -73,12 +74,12 @@ class AuditService:
     async def log_role_assigned(
         self,
         *,
-        actor_id: int,
+        actor_id: UUID,
         actor_username: str,
-        user_id: int,
-        role_id: int,
+        user_id: UUID,
+        role_id: UUID,
         role_code: str,
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
         ip_address: str = "",
     ) -> None:
         """Log a role being assigned to a user."""
@@ -89,19 +90,19 @@ class AuditService:
             resource_type="RoleAssignment",
             resource_id=str(user_id),
             tenant_id=tenant_id,
-            new_value={"user_id": user_id, "role_id": role_id, "role_code": role_code},
+            new_value={"user_id": str(user_id), "role_id": str(role_id), "role_code": role_code},
             ip_address=ip_address,
         )
 
     async def log_role_revoked(
         self,
         *,
-        actor_id: int,
+        actor_id: UUID,
         actor_username: str,
-        user_id: int,
-        role_id: int,
+        user_id: UUID,
+        role_id: UUID,
         role_code: str,
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
         ip_address: str = "",
     ) -> None:
         """Log a role being revoked from a user."""
@@ -112,19 +113,19 @@ class AuditService:
             resource_type="RoleAssignment",
             resource_id=str(user_id),
             tenant_id=tenant_id,
-            old_value={"user_id": user_id, "role_id": role_id, "role_code": role_code},
+            old_value={"user_id": str(user_id), "role_id": str(role_id), "role_code": role_code},
             ip_address=ip_address,
         )
 
     async def log_permission_change(
         self,
         *,
-        actor_id: int,
+        actor_id: UUID,
         actor_username: str,
         action: AuditAction,
-        role_id: int,
+        role_id: UUID,
         permission_code: str,
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
         ip_address: str = "",
     ) -> None:
         """Log a permission being granted to or revoked from a role."""
@@ -135,14 +136,14 @@ class AuditService:
             resource_type="RolePermission",
             resource_id=str(role_id),
             tenant_id=tenant_id,
-            new_value={"role_id": role_id, "permission_code": permission_code},
+            new_value={"role_id": str(role_id), "permission_code": permission_code},
             ip_address=ip_address,
         )
 
     async def log_login(
         self,
         *,
-        user_id: int | None,
+        user_id: UUID | None,
         username: str,
         success: bool,
         ip_address: str = "",

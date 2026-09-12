@@ -4,17 +4,16 @@ API v1 Router - aggregates all v1 endpoint routers.
 
 from fastapi import APIRouter
 
-from src.api.v1.endpoints.approval_matrix_controller import router as approval_matrix_router
 from src.api.v1.endpoints.auth_controller import router as auth_router
+from src.api.v1.endpoints.darwinbox_controller import router as darwinbox_router
 from src.api.v1.endpoints.employee_ad_controller import router as employee_ad_router
 from src.api.v1.endpoints.employee_import_controller import router as employee_import_router
+from src.api.v1.endpoints.encryption_controller import router as encryption_router
+from src.api.v1.endpoints.esigner_controller import router as esigner_router
 from src.api.v1.endpoints.health_controller import router as health_router
+from src.api.v1.endpoints.ldap_controller import router as ldap_router
 from src.api.v1.endpoints.rbac_controller import router as rbac_router
 from src.api.v1.endpoints.user_controller import router as user_router
-from src.api.v1.endpoints.workflow_controller import router as workflow_router
-from src.api.v1.endpoints.workflow_instance_controller import (
-    router as workflow_instance_router,
-)
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
@@ -24,8 +23,7 @@ api_v1_router.include_router(rbac_router)
 api_v1_router.include_router(employee_import_router)
 api_v1_router.include_router(health_router)
 api_v1_router.include_router(employee_ad_router)
-
-# ─── Workflow engine ───
-api_v1_router.include_router(approval_matrix_router)
-api_v1_router.include_router(workflow_router)
-api_v1_router.include_router(workflow_instance_router)
+api_v1_router.include_router(darwinbox_router)
+api_v1_router.include_router(ldap_router)
+api_v1_router.include_router(esigner_router)
+api_v1_router.include_router(encryption_router)

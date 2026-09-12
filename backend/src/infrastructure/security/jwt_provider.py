@@ -5,6 +5,7 @@ Handles access tokens and refresh tokens with configurable expiry.
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import jwt
 
@@ -38,7 +39,7 @@ class JWTProvider:
         self._access_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
         self._refresh_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
 
-    def create_access_token(self, username: str, user_id: int) -> str:
+    def create_access_token(self, username: str, user_id: UUID) -> str:
         """Generate an access token with short-lived expiry."""
         now = datetime.now(UTC)
         payload = {
@@ -50,7 +51,7 @@ class JWTProvider:
         }
         return jwt.encode(payload, self._secret_key, algorithm=self._algorithm)
 
-    def create_refresh_token(self, username: str, user_id: int) -> str:
+    def create_refresh_token(self, username: str, user_id: UUID) -> str:
         """Generate a refresh token with longer expiry."""
         now = datetime.now(UTC)
         payload = {
@@ -98,8 +99,8 @@ class JWTProvider:
 
     def decode_token(self, token: str) -> dict[str, Any]:
         """Decode a token without type validation. Returns raw payload dict."""
-        # jwt.decode is typed as returning Any; bind it so the declared return
-        # type is actually enforced rather than silently widened.
+        # PyJWT types decode() as Any; bind it to the declared shape so the
+        # method's return annotation is actually enforced by the checker.
         payload: dict[str, Any] = jwt.decode(
             token, self._secret_key, algorithms=[self._algorithm]
         )

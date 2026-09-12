@@ -22,7 +22,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     Middleware that ensures every request has a correlation ID.
 
     If the incoming request contains X-Correlation-ID, it is reused.
-    Otherwise, a new int is generated.
+    Otherwise, a new UUID is generated.
     The correlation ID is stored in contextvars for global access
     and included in the response headers.
     """
@@ -45,5 +45,3 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         response.headers[CORRELATION_ID_HEADER] = get_correlation_id()
 
         return response
-
-

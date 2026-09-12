@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="EMCURE">
+  <g fill="#e8112d">
+    <!-- vertical stem -->
+    <rect x="150" y="120" width="62" height="272" rx="6"/>
+    <!-- top arm -->
+    <rect x="150" y="120" width="230" height="62" rx="6"/>
+    <!-- middle arm -->
+    <rect x="150" y="225" width="200" height="62" rx="6"/>
+    <!-- bottom arm -->
+    <rect x="150" y="330" width="230" height="62" rx="6"/>
+  </g>
+</svg>

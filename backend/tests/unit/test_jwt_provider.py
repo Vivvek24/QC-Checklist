@@ -67,8 +67,6 @@ class TestJWTProvider:
 
         # Create a token with 0 minutes expiry won't actually expire instantly
         # due to datetime precision, so we test with decode instead
-        from datetime import datetime, timedelta
-
         import jwt as pyjwt
 
         expired_payload = {

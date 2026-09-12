@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '@shared/services/apiClient';
+
 import type {
   CreateUserRequest,
   ImportEmployeesResponse,
@@ -42,10 +43,9 @@ export const userApi = {
   },
 
   importEmployees: async (employeeIds: string[]): Promise<ImportEmployeesResponse> => {
-    const { data } = await apiClient.post<ImportEmployeesResponse>(
-      '/users/import-employees',
-      { employee_ids: employeeIds }
-    );
+    const { data } = await apiClient.post<ImportEmployeesResponse>('/users/import-employees', {
+      employee_ids: employeeIds,
+    });
     return data;
   },
 };

@@ -262,3 +262,152 @@ class TestMicrosoftSsoCallback:
             )
 
         assert response.status_code == 400, response.text
+
+
+# ─────────────────────── Microsoft SSO login URL ───────────────────────
+
+
+class TestMicrosoftLoginUrl:
+    """GET /api/v1/auth/microsoft/login — the browser-redirect URL endpoint."""
+
+    async def test_configured_sso_returns_the_authorization_url(
+        self, client: AsyncClient
+    ) -> None:
+        with patch(
+            "src.infrastructure.external.azure_sso.AzureSsoClient",
+            return_value=_sso_client(),
+        ) as mock_client_cls:
+            mock_client_cls.return_value.build_authorization_url.return_value = (
+                "https://login.microsoftonline.com/tenant/oauth2/v2.0/authorize?client_id=x",
+                "http://localhost:3000/auth/microsoft/callback",
+            )
+            response = await client.get("/api/v1/auth/microsoft/login")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["auth_url"].startswith("https://login.microsoftonline.com")
+        assert body["redirect_uri"] == "http://localhost:3000/auth/microsoft/callback"
+
+    async def test_unconfigured_sso_returns_501(self, client: AsyncClient) -> None:
+        with patch(
+            "src.infrastructure.external.azure_sso.AzureSsoClient",
+            return_value=_sso_client(configured=False),
+        ):
+            response = await client.get("/api/v1/auth/microsoft/login")
+
+        assert response.status_code == 501, response.text
+
+
+# ─────────────────────── /auth/refresh ───────────────────────
+
+
+class TestRefreshTokenAPI:
+    """POST /api/v1/auth/refresh — exchanges the refresh cookie for an access token."""
+
+    async def test_missing_cookie_returns_401(self, client: AsyncClient) -> None:
+        response = await client.post("/api/v1/auth/refresh")
+
+        assert response.status_code == 401, response.text
+        assert "Missing refresh token" in response.json()["detail"]
+
+    async def test_valid_cookie_returns_a_new_access_token(
+        self, client: AsyncClient, mock_user_repo: AsyncMock, active_user: User
+    ) -> None:
+        from src.infrastructure.security.jwt_provider import JWTProvider
+
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+        refresh_token = JWTProvider().create_refresh_token(
+            active_user.username, active_user.id
+        )
+        client.cookies.set("refresh_token", refresh_token)
+
+        response = await client.post("/api/v1/auth/refresh")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["access_token"]
+        assert response.json()["token_type"] == "Bearer"
+
+    async def test_garbage_cookie_returns_401_and_clears_it(
+        self, client: AsyncClient
+    ) -> None:
+        client.cookies.set("refresh_token", "not-a-real-token")
+
+        response = await client.post("/api/v1/auth/refresh")
+
+        assert response.status_code == 401, response.text
+        # The stale cookie is cleared so the client stops retrying with it.
+        set_cookie = response.headers.get("set-cookie", "")
+        assert "refresh_token=" in set_cookie
+
+    async def test_blocked_user_refresh_returns_403(
+        self, client: AsyncClient, mock_user_repo: AsyncMock, blocked_user: User
+    ) -> None:
+        from src.infrastructure.security.jwt_provider import JWTProvider
+
+        mock_user_repo.get_by_username.return_value = blocked_user
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+        refresh_token = JWTProvider().create_refresh_token(
+            blocked_user.username, blocked_user.id
+        )
+        client.cookies.set("refresh_token", refresh_token)
+
+        response = await client.post("/api/v1/auth/refresh")
+
+        assert response.status_code == 403, response.text
+
+
+# ─────────────────────── /auth/me ───────────────────────
+
+
+class TestGetMeAPI:
+    """GET /api/v1/auth/me — the authenticated caller's own profile."""
+
+    async def test_anonymous_request_is_rejected(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/auth/me")
+
+        assert response.status_code in (401, 403), response.text
+
+    async def test_authenticated_request_returns_profile_without_password_hash(
+        self, client: AsyncClient, mock_user_repo: AsyncMock, active_user: User
+    ) -> None:
+        from src.infrastructure.security.jwt_provider import JWTProvider
+
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+        token = JWTProvider().create_access_token(active_user.username, active_user.id)
+        client.headers["Authorization"] = f"Bearer {token}"
+
+        response = await client.get("/api/v1/auth/me")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["username"] == active_user.username
+        assert body["is_active"] is True
+        assert "password_hash" not in body
+
+
+# ─────────────────────── /auth/logout ───────────────────────
+
+
+class TestLogoutAPI:
+    """POST /api/v1/auth/logout — records the event and clears the refresh cookie."""
+
+    async def test_anonymous_request_is_rejected(self, client: AsyncClient) -> None:
+        response = await client.post("/api/v1/auth/logout")
+
+        assert response.status_code in (401, 403), response.text
+
+    async def test_authenticated_logout_clears_the_refresh_cookie(
+        self, client: AsyncClient, mock_user_repo: AsyncMock, active_user: User
+    ) -> None:
+        from src.infrastructure.security.jwt_provider import JWTProvider
+
+        app.dependency_overrides[get_user_repository] = lambda: mock_user_repo
+        token = JWTProvider().create_access_token(active_user.username, active_user.id)
+        client.headers["Authorization"] = f"Bearer {token}"
+
+        response = await client.post("/api/v1/auth/logout")
+
+        assert response.status_code == 200, response.text
+        assert response.json()["detail"] == "Logged out successfully"
+        set_cookie = response.headers.get("set-cookie", "")
+        assert "refresh_token=" in set_cookie

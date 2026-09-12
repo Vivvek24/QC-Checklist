@@ -1,8 +1,14 @@
-"""SQLAlchemy ORM model for immutable audit logs. Append-only."""
+"""
+SQLAlchemy ORM model for immutable audit logs.
+This table is append-only — no UPDATE or DELETE operations are permitted.
+"""
 
+import uuid
 from datetime import UTC, datetime
+from uuid import uuid4
 
-from sqlalchemy import BigInteger, DateTime, String, Text
+from sqlalchemy import DateTime, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.database.models.base_model import Base
@@ -11,19 +17,38 @@ from src.infrastructure.database.models.base_model import Base
 class AuditLogModel(Base):
     """
     Immutable audit log table.
-    Does NOT inherit from BaseModel — history rows are never updated.
-    id is BIGSERIAL (auto-increment).
+    Does NOT inherit from BaseModel to avoid modifiable audit fields.
     """
 
     __tablename__ = "audit_logs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
-    actor_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
-    actor_username: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    resource_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    resource_id: Mapped[str] = mapped_column(String(100), nullable=False, default="")
-    tenant_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    # These three are UUID columns (as_uuid=True), so SQLAlchemy returns
+    # uuid.UUID instances. `resource_id` below is deliberately a string, since
+    # it holds identifiers of mixed types (usernames as well as UUIDs).
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        nullable=False,
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+    actor_username: Mapped[str] = mapped_column(
+        String(255), nullable=False, index=True
+    )
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True
+    )
+    resource_type: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True
+    )
+    resource_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, default=""
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     old_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     new_value: Mapped[str | None] = mapped_column(Text, nullable=True)
     ip_address: Mapped[str] = mapped_column(String(45), nullable=False, default="")

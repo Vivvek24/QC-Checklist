@@ -2,19 +2,18 @@
 User Application Service.
 Orchestrates user business logic — CRUD, role assignment, details, history.
 
-Depends only on domain ports and application DTOs: no SQLAlchemy session,
-no ORM models, no API schemas.
+Depends only on domain ports: no SQLAlchemy session and no ORM models, so the
+application layer stays free of infrastructure.
 """
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from src.application.dtos.user_dtos import (
-    CreateUserDTO,
-    UpdateUserDTO,
-    UserDetailDTO,
-    UserDTO,
-    UserListDTO,
+from src.api.v1.schemas.user_request import CreateUserRequest, UpdateUserRequest
+from src.api.v1.schemas.user_response import (
+    UserDetailResponse,
+    UserListResponse,
+    UserResponse,
 )
 from src.domain.entities.audit_log import AuditAction
 from src.domain.entities.role import RoleAssignment
@@ -58,7 +57,7 @@ class UserService:
 
     # ─── List Users ───
 
-    async def list_users(self, skip: int = 0, limit: int = 100) -> UserListDTO:
+    async def list_users(self, skip: int = 0, limit: int = 100) -> UserListResponse:
         """Get a page of users decorated with employee details and last login."""
         users = await self._users.list_all(skip=skip, limit=limit)
         user_ids = [u.id for u in users]
@@ -68,9 +67,9 @@ class UserService:
             str(AuditAction.LOGIN_SUCCESS), user_ids
         )
 
-        return UserListDTO(
+        return UserListResponse(
             users=[
-                self._to_dto(
+                self._to_response(
                     user,
                     details=details.get(user.id),
                     last_login=last_logins.get(user.id),
@@ -84,30 +83,33 @@ class UserService:
 
     # ─── Create User ───
 
-    async def create_user(self, dto: CreateUserDTO, actor: User) -> UserDTO:
+    async def create_user(
+        self, request: CreateUserRequest, actor: User
+    ) -> UserResponse:
         """Create a new user and optionally assign a role."""
-        if await self._users.exists_by_username(dto.username):
-            raise ValueError(f"Username '{dto.username}' already exists")
+        if await self._users.exists_by_username(request.username):
+            raise ValueError(f"Username '{request.username}' already exists")
 
         user = User(
-            username=dto.username,
-            password_hash=self._hasher.hash(dto.password),
-            is_validate_ad=dto.is_validate_ad,
+            id=uuid4(),
+            username=request.username,
+            password_hash=self._hasher.hash(request.password),
+            is_validate_ad=request.is_validate_ad,
             created_by=actor.username,
             modified_by=actor.username,
         )
 
         created = await self._users.create(user)
 
-        if dto.role_id:
-            await self._assign_role(created.id, dto.role_id, actor.username)
+        if request.role_id:
+            await self._assign_role(created.id, request.role_id, actor.username)
 
-        return self._to_dto(created)
+        return self._to_response(created)
 
     # ─── Get User by ID ───
 
-    async def get_user(self, user_id: int) -> User:
-        """Get a user domain entity by ID. Raises ValueError if not found."""
+    async def get_user(self, user_id: UUID) -> User:
+        """Get a user by ID. Raises ValueError if not found."""
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise ValueError("User not found")
@@ -116,33 +118,33 @@ class UserService:
     # ─── Update User ───
 
     async def update_user(
-        self, user_id: int, dto: UpdateUserDTO, actor: User
-    ) -> UserDTO:
+        self, user_id: UUID, request: UpdateUserRequest, actor: User
+    ) -> UserResponse:
         """Update user properties and optionally reassign role."""
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise ValueError("User not found")
 
-        if dto.is_active is not None:
-            user.is_active = dto.is_active
-        if dto.is_blocked is not None:
-            user.is_blocked = dto.is_blocked
-        if dto.is_validate_ad is not None:
-            user.is_validate_ad = dto.is_validate_ad
+        if request.is_active is not None:
+            user.is_active = request.is_active
+        if request.is_blocked is not None:
+            user.is_blocked = request.is_blocked
+        if request.is_validate_ad is not None:
+            user.is_validate_ad = request.is_validate_ad
 
         user.mark_modified(actor.username)
         updated = await self._users.update(user)
 
         # Replace any existing assignment when a role is supplied.
-        if dto.role_id is not None:
+        if request.role_id is not None:
             await self._assignments.deactivate_all_for_user(user_id, actor.username)
-            await self._assign_role(user_id, dto.role_id, actor.username)
+            await self._assign_role(user_id, request.role_id, actor.username)
 
-        return self._to_dto(updated)
+        return self._to_response(updated)
 
     # ─── Get Full Details ───
 
-    async def get_user_details(self, user_id: int) -> UserDetailDTO:
+    async def get_user_details(self, user_id: UUID) -> UserDetailResponse:
         """Get full user profile including all employee AD fields."""
         user = await self._users.get_by_id(user_id)
         if user is None:
@@ -150,7 +152,7 @@ class UserService:
 
         details = await self._details.get_by_user_id(user_id)
 
-        return UserDetailDTO(
+        return UserDetailResponse(
             id=user.id,
             username=user.username,
             is_active=user.is_active,
@@ -190,7 +192,7 @@ class UserService:
 
     # ─── Get User Roles ───
 
-    async def get_user_roles(self, user_id: int) -> dict[str, Any]:
+    async def get_user_roles(self, user_id: UUID) -> dict[str, Any]:
         """Get all active roles and their permissions assigned to a user."""
         assignments = await self._assignments.list_active_for_user(user_id)
         if not assignments:
@@ -225,7 +227,7 @@ class UserService:
     # ─── Get Login History ───
 
     async def get_login_history(
-        self, user_id: int, limit: int = 20
+        self, user_id: UUID, limit: int = 20
     ) -> list[dict[str, Any]]:
         """Get the login/logout audit trail for a user."""
         entries = await self._audit.query(
@@ -255,10 +257,13 @@ class UserService:
 
     # ─── Private Helpers ───
 
-    async def _assign_role(self, user_id: int, role_id: int, actor_username: str) -> None:
+    async def _assign_role(
+        self, user_id: UUID, role_id: UUID, actor_username: str
+    ) -> None:
         """Assign a single role to a user."""
         await self._assignments.create(
             RoleAssignment(
+                id=uuid4(),
                 user_id=user_id,
                 role_id=role_id,
                 tenant_id=None,
@@ -269,14 +274,14 @@ class UserService:
         )
 
     @staticmethod
-    def _to_dto(
+    def _to_response(
         user: User,
         *,
         details: UserDetails | None = None,
         last_login: Any = None,
-    ) -> UserDTO:
-        """Map domain entity to application DTO."""
-        return UserDTO(
+    ) -> UserResponse:
+        """Map domain entity to response DTO."""
+        return UserResponse(
             id=user.id,
             username=user.username,
             is_active=user.is_active,

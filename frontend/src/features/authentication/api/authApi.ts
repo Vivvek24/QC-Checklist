@@ -9,6 +9,7 @@
 
 import { apiClient, refreshAccessToken } from '@shared/services/apiClient';
 import { storageService } from '@shared/services/storageService';
+
 import type { CurrentUser, LoginRequest, TokenResponse } from '../models/auth.types';
 
 export const authApi = {

@@ -7,11 +7,21 @@
  * - Correlation ID header
  */
 
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios from 'axios';
+
 import { storageService } from './storageService';
 
 const API_BASE_URL = '/api/v1';
 
+/*
+  `axios.create` on the default export is the documented way to build an instance. The
+  import/no-named-as-default-member rule flags it because axios also exports `create`
+  standalone, but the two are the same function and the default form is what every axios
+  example and its own typings assume. Silenced here rather than app-wide, so the rule keeps
+  catching the mistake it is actually for.
+*/
+// eslint-disable-next-line import/no-named-as-default-member
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
@@ -39,11 +49,7 @@ export const setSessionExpiredHandler = (handler: SessionExpiredHandler): void =
 
 /** Perform a silent refresh using the HttpOnly cookie. Returns the new access token. */
 export const refreshAccessToken = async (): Promise<string> => {
-  const { data } = await axios.post(
-    `${API_BASE_URL}/auth/refresh`,
-    {},
-    { withCredentials: true }
-  );
+  const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, { withCredentials: true });
   const token = data.access_token as string;
   storageService.setAccessToken(token);
   return token;
@@ -59,7 +65,7 @@ apiClient.interceptors.request.use(
     config.headers['X-Correlation-ID'] = crypto.randomUUID();
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // Response interceptor: handle 401 with a single shared refresh
@@ -87,10 +93,15 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
-    // Never try to refresh the refresh call itself, and only retry once.
-    const isAuthRefreshCall = originalRequest?.url?.includes('/auth/refresh');
+    // Never run the silent-refresh flow for the auth entry-point calls
+    // themselves (login/logout/refresh). A 401 from these is a genuine failure
+    // (e.g. wrong credentials) and must propagate so the caller can handle it —
+    // not be mistaken for an expired session.
+    const url = originalRequest?.url ?? '';
+    const isAuthEntryCall =
+      url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/logout');
 
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRefreshCall) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEntryCall) {
       if (isRefreshing) {
         // Wait for the in-flight refresh, then retry this request.
         return new Promise((resolve, reject) => {
@@ -123,5 +134,5 @@ apiClient.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );

@@ -4,6 +4,7 @@ Thin controller — delegates all business logic to RbacService.
 """
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -16,7 +17,6 @@ from src.api.v1.dependencies import (
     get_role_repository,
 )
 from src.api.v1.schemas.rbac_schema import (
-    ApiPermissionsResponse,
     AuditLogListResponse,
     AuditLogResponse,
     FieldPermissionsResponse,
@@ -56,7 +56,9 @@ def _get_client_ip(request: Request) -> str:
 def _get_rbac_service(
     permission_repo: IPermissionRepository = Depends(get_permission_repository),
     role_repo: IRoleRepository = Depends(get_role_repository),
-    assignment_repo: IRoleAssignmentRepository = Depends(get_role_assignment_repository),
+    assignment_repo: IRoleAssignmentRepository = Depends(
+        get_role_assignment_repository
+    ),
     audit_repo: IAuditLogRepository = Depends(get_audit_log_repository),
     permission_resolver: IPermissionResolver = Depends(get_permission_resolver),
 ) -> RbacService:
@@ -93,7 +95,7 @@ async def list_permissions(
     "/permissions",
     response_model=PermissionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a permission ",
+    summary="Create a permission",
     dependencies=[Depends(require_permission("rbac.create"))],
 )
 async def create_permission(
@@ -131,7 +133,7 @@ async def create_permission(
     dependencies=[Depends(require_permission("rbac.read"))],
 )
 async def list_roles(
-    tenant_id: int | None = Query(default=None),
+    tenant_id: UUID | None = Query(default=None),
     service: RbacService = Depends(_get_rbac_service),
 ) -> RoleListResponse:
     data = await service.list_roles(tenant_id=tenant_id)
@@ -145,7 +147,7 @@ async def list_roles(
     "/roles",
     response_model=RoleResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a role ",
+    summary="Create a role",
     dependencies=[Depends(require_permission("rbac.create"))],
 )
 async def create_role(
@@ -173,11 +175,11 @@ async def create_role(
 @router.patch(
     "/roles/{role_id}",
     response_model=RoleResponse,
-    summary="Update a role ",
+    summary="Update a role",
     dependencies=[Depends(require_permission("rbac.update"))],
 )
 async def update_role(
-    role_id: int,
+    role_id: UUID,
     request_body: RoleUpdate,
     request: Request,
     current_user: User = Depends(get_current_active_user),
@@ -212,7 +214,7 @@ async def update_role(
 @router.post(
     "/roles/grant-permission",
     status_code=status.HTTP_201_CREATED,
-    summary="Grant permission to a role ",
+    summary="Grant permission to a role",
     dependencies=[Depends(require_permission("rbac.update"))],
 )
 async def grant_permission_to_role(
@@ -240,7 +242,7 @@ async def grant_permission_to_role(
 
 @router.post(
     "/roles/revoke-permission",
-    summary="Revoke permission from a role ",
+    summary="Revoke permission from a role",
     dependencies=[Depends(require_permission("rbac.update"))],
 )
 async def revoke_permission_from_role(
@@ -270,7 +272,7 @@ async def revoke_permission_from_role(
     "/assignments",
     response_model=RoleAssignmentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Assign role to user ",
+    summary="Assign role to user",
     dependencies=[Depends(require_permission("rbac.update"))],
 )
 async def assign_role(
@@ -300,7 +302,7 @@ async def assign_role(
 
 @router.post(
     "/assignments/revoke",
-    summary="Revoke role from user ",
+    summary="Revoke role from user",
     dependencies=[Depends(require_permission("rbac.update"))],
 )
 async def revoke_role(
@@ -325,6 +327,10 @@ async def revoke_role(
 # ═══════════════════════════════════════════════════════════════════
 # USER PERMISSION QUERIES (for frontend consumption)
 # ═══════════════════════════════════════════════════════════════════
+#
+# There is deliberately no `/my-permissions/api` route here. API-scope
+# authorisation is enforced server-side by `require_api_permission`, and the
+# frontend gates only on menu and field scopes.
 
 
 @router.get(
@@ -336,34 +342,16 @@ async def get_my_menu_permissions(
     current_user: User = Depends(get_current_active_user),
     service: RbacService = Depends(_get_rbac_service),
 ) -> MenuPermissionsResponse:
+    """
+    GET /api/v1/rbac/my-permissions/menu
+
+    Guarded by authentication alone: it only ever reports the caller's own
+    grants, and needing a permission to discover your permissions would be
+    circular.
+    """
     data = await service.get_my_menu_permissions(current_user)
     return MenuPermissionsResponse(
         menu_keys=data["menu_keys"],
-        permissions=[PermissionResponse.model_validate(p) for p in data["permissions"]],
-    )
-
-
-@router.get(
-    "/my-permissions/api",
-    response_model=ApiPermissionsResponse,
-    summary="Get current user's API permissions",
-)
-async def get_my_api_permissions(
-    current_user: User = Depends(get_current_active_user),
-    service: RbacService = Depends(_get_rbac_service),
-) -> ApiPermissionsResponse:
-    """
-    GET /api/v1/rbac/my-permissions/api
-
-    Lets the UI hide controls the caller could not use anyway. Guarded by
-    authentication alone, like the menu equivalent: it only ever reports the
-    caller's own grants, and needing a permission to discover your permissions
-    would be circular.
-    """
-    data = await service.get_my_api_permissions(current_user)
-    return ApiPermissionsResponse(
-        codes=data["codes"],
-        resource_actions=data["resource_actions"],
         permissions=[PermissionResponse.model_validate(p) for p in data["permissions"]],
     )
 
@@ -425,4 +413,3 @@ async def list_audit_logs(
         skip=data["skip"],
         limit=data["limit"],
     )
-

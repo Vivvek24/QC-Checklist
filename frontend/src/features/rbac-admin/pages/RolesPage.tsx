@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+
 import { Button } from 'primereact/button';
 import { Column } from 'primereact/column';
 import { DataTable } from 'primereact/datatable';
@@ -15,8 +16,11 @@ import { Tag } from 'primereact/tag';
 import { Toast } from 'primereact/toast';
 import { Toolbar } from 'primereact/toolbar';
 import { Tree } from 'primereact/tree';
-import type { TreeNode } from 'primereact/treenode';
 import type { TreeCheckboxSelectionKeys } from 'primereact/tree';
+import type { TreeNode } from 'primereact/treenode';
+
+import { extractApiError } from '@shared/utils/apiError';
+
 import { rbacAdminApi } from '../api/rbacAdminApi';
 import type { CreateRoleRequest, Permission, Role } from '../models/rbac-admin.types';
 
@@ -30,12 +34,13 @@ function buildPermissionTree(permissions: Permission[]): TreeNode[] {
 
   for (const perm of permissions) {
     const scope = perm.scope;
-    // Use first part of resource as feature group
+    // Use first part of resource as feature group. `split` always yields at
+    // least one element, but fall back to the full resource to satisfy the
+    // compiler's noUncheckedIndexedAccess check.
     const resource = perm.resource.split('.')[0] ?? perm.resource;
 
-    if (!scopeMap[scope]) scopeMap[scope] = {};
-    if (!scopeMap[scope]![resource]) scopeMap[scope]![resource] = [];
-    scopeMap[scope]![resource]!.push(perm);
+    const resourceMap = (scopeMap[scope] ??= {});
+    (resourceMap[resource] ??= []).push(perm);
   }
 
   const scopeLabels: Record<string, string> = {
@@ -65,13 +70,13 @@ function buildPermissionTree(permissions: Permission[]): TreeNode[] {
     };
 
     for (const [resource, perms] of Object.entries(resources).sort()) {
-      if (perms.length === 1) {
+      const singlePerm = perms.length === 1 ? perms[0] : undefined;
+      if (singlePerm) {
         // Single permission under resource — add directly to scope
-        const perm = perms[0]!;
         scopeNode.children!.push({
-          key: perm.id,
-          label: `${perm.name}`,
-          data: perm,
+          key: singlePerm.id,
+          label: `${singlePerm.name}`,
+          data: singlePerm,
           icon: 'pi pi-key',
         });
       } else {
@@ -102,10 +107,7 @@ function buildPermissionTree(permissions: Permission[]): TreeNode[] {
  * Convert selected permission IDs to TreeCheckboxSelectionKeys format.
  * Also marks parent nodes as checked/partial based on children.
  */
-function buildSelectionKeys(
-  selectedIds: Set<string>,
-  tree: TreeNode[]
-): TreeCheckboxSelectionKeys {
+function buildSelectionKeys(selectedIds: Set<string>, tree: TreeNode[]): TreeCheckboxSelectionKeys {
   const keys: TreeCheckboxSelectionKeys = {};
 
   for (const scopeNode of tree) {
@@ -163,13 +165,13 @@ function buildSelectionKeys(
  */
 function extractPermissionIds(
   selectionKeys: TreeCheckboxSelectionKeys,
-  permissions: Permission[]
+  permissions: Permission[],
 ): string[] {
   const permIdSet = new Set(permissions.map((p) => p.id));
   const selected: string[] = [];
 
   for (const [key, value] of Object.entries(selectionKeys)) {
-    if (permIdSet.has(key) && (value as any).checked) {
+    if (permIdSet.has(key) && (value as { checked?: boolean }).checked) {
       selected.push(key);
     }
   }
@@ -207,11 +209,11 @@ export const RolesPage = () => {
       setRoles(rolesData.roles);
       setPermissions(permsData);
       setPermissionTree(buildPermissionTree(permsData));
-    } catch (error: any) {
+    } catch (error) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.response?.data?.detail || 'Failed to load RBAC data',
+        detail: extractApiError(error, 'Failed to load RBAC data'),
         life: 5000,
       });
     } finally {
@@ -231,11 +233,11 @@ export const RolesPage = () => {
         life: 3000,
       });
       loadData();
-    } catch (error: any) {
+    } catch (error) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.response?.data?.detail || 'Failed to create role',
+        detail: extractApiError(error, 'Failed to create role'),
         life: 5000,
       });
     }
@@ -285,11 +287,11 @@ export const RolesPage = () => {
         life: 3000,
       });
       loadData();
-    } catch (error: any) {
+    } catch (error) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.response?.data?.detail || 'Failed to update permissions',
+        detail: extractApiError(error, 'Failed to update permissions'),
         life: 5000,
       });
     }
@@ -362,7 +364,9 @@ export const RolesPage = () => {
       {/* Header */}
       <div className="mb-4">
         <h2 className="text-2xl font-semibold text-900 m-0">Roles & Permissions</h2>
-        <p className="text-600 mt-1 mb-0">Manage roles, assign permissions, and configure access control</p>
+        <p className="text-600 mt-1 mb-0">
+          Manage roles, assign permissions, and configure access control
+        </p>
       </div>
 
       <div className="surface-card p-4 border-round shadow-1">
@@ -413,7 +417,9 @@ export const RolesPage = () => {
       >
         <div className="flex flex-column gap-3 mt-2">
           <div className="flex flex-column gap-2">
-            <label htmlFor="role-code" className="font-medium">Code</label>
+            <label htmlFor="role-code" className="font-medium">
+              Code
+            </label>
             <InputText
               id="role-code"
               value={createForm.code}
@@ -422,7 +428,9 @@ export const RolesPage = () => {
             />
           </div>
           <div className="flex flex-column gap-2">
-            <label htmlFor="role-name" className="font-medium">Name</label>
+            <label htmlFor="role-name" className="font-medium">
+              Name
+            </label>
             <InputText
               id="role-name"
               value={createForm.name}
@@ -431,7 +439,9 @@ export const RolesPage = () => {
             />
           </div>
           <div className="flex flex-column gap-2">
-            <label htmlFor="role-desc" className="font-medium">Description</label>
+            <label htmlFor="role-desc" className="font-medium">
+              Description
+            </label>
             <InputTextarea
               id="role-desc"
               value={createForm.description}
@@ -463,11 +473,7 @@ export const RolesPage = () => {
                 text
                 onClick={() => setShowPermissionsDialog(false)}
               />
-              <Button
-                label="Save Changes"
-                icon="pi pi-check"
-                onClick={handleSavePermissions}
-              />
+              <Button label="Save Changes" icon="pi pi-check" onClick={handleSavePermissions} />
             </div>
           </div>
         }

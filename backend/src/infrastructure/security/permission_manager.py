@@ -6,6 +6,7 @@ Integrates with the role-permission database model and supports multi-tenancy.
 
 from collections.abc import Callable
 from typing import Any
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
@@ -39,8 +40,8 @@ class PermissionManager(IPermissionResolver):
 
     async def get_user_permissions(
         self,
-        user_id: int,
-        tenant_id: int | None = None,
+        user_id: UUID,
+        tenant_id: UUID | None = None,
         scope: PermissionScope | None = None,
     ) -> list[Permission]:
         """
@@ -52,7 +53,9 @@ class PermissionManager(IPermissionResolver):
             scope: Optional scope filter (MENU, API, FIELD).
 
         Returns:
-            Deduplicated list of active PermissionModel instances.
+            Deduplicated list of active domain Permission entities. Returning
+            entities rather than ORM models is what lets the application layer
+            depend on `IPermissionResolver` without importing infrastructure.
         """
         # Get all active role assignments for the user
         stmt = (
@@ -122,15 +125,17 @@ class PermissionManager(IPermissionResolver):
                         perm_id = str(perm.id)
                         if perm_id not in seen_ids:
                             seen_ids.add(perm_id)
-                            permissions.append(PermissionRepositoryImpl._to_entity(perm))
+                            permissions.append(
+                                PermissionRepositoryImpl._to_entity(perm)
+                            )
 
         return permissions
 
     async def has_permission(
         self,
-        user_id: int,
+        user_id: UUID,
         permission_code: str,
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
     ) -> bool:
         """Check if user has a specific permission (by code)."""
         permissions = await self.get_user_permissions(user_id, tenant_id)
@@ -138,10 +143,10 @@ class PermissionManager(IPermissionResolver):
 
     async def has_api_access(
         self,
-        user_id: int,
+        user_id: UUID,
         resource: str,
         action: str | PermissionAction,
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
     ) -> bool:
         """Check if user has API-level access to a resource + action."""
         permissions = await self.get_user_permissions(
@@ -154,8 +159,8 @@ class PermissionManager(IPermissionResolver):
 
     async def get_menu_permissions(
         self,
-        user_id: int,
-        tenant_id: int | None = None,
+        user_id: UUID,
+        tenant_id: UUID | None = None,
     ) -> list[str]:
         """Get all menu resource keys the user can access."""
         permissions = await self.get_user_permissions(
@@ -165,9 +170,9 @@ class PermissionManager(IPermissionResolver):
 
     async def get_field_permissions(
         self,
-        user_id: int,
+        user_id: UUID,
         resource: str,
-        tenant_id: int | None = None,
+        tenant_id: UUID | None = None,
     ) -> dict[str, list[str]]:
         """
         Get field-level permissions for a resource.
@@ -223,7 +228,9 @@ def require_permission(permission_code: str) -> Callable[..., Any]:
     return permission_checker
 
 
-def require_api_permission(resource: str, action: str | PermissionAction) -> Callable[..., Any]:
+def require_api_permission(
+    resource: str, action: str | PermissionAction
+) -> Callable[..., Any]:
     """
     FastAPI dependency for API-level permission checks.
 
@@ -253,3 +260,47 @@ def require_api_permission(resource: str, action: str | PermissionAction) -> Cal
 
     return api_permission_checker
 
+
+def require_field_permission(
+    resource: str, field: str, action: str | PermissionAction
+) -> Callable[..., Any]:
+    """
+    FastAPI dependency for field-level permission checks.
+
+    For an endpoint that exists to change one guarded field rather than a whole record.
+    A field grant normally decides whether a column is shown (the frontend's
+    `<FieldGate>`), and where the column is editable the write needs the same grant
+    enforced server-side — otherwise the only thing stopping the change is a button the
+    client chose not to draw.
+
+    Resolved through `get_field_permissions`, so this asks exactly the question the client
+    asks of `/rbac/my-permissions/fields`. Checking a permission code here and a field
+    name there would be two spellings of one rule, free to drift apart.
+
+    Stacks with `require_api_permission`: the caller needs the endpoint's own grant as
+    well, so this narrows access rather than granting it.
+
+    Usage:
+        @router.patch("/{id}/salary", dependencies=[
+            Depends(require_api_permission("users", "UPDATE")),
+            Depends(require_field_permission("users", "salary", "UPDATE")),
+        ])
+    """
+    from src.api.v1.dependencies import get_current_active_user
+    from src.domain.entities.user import User
+
+    async def field_permission_checker(
+        current_user: User = Depends(get_current_active_user),
+        session: AsyncSession = Depends(get_db_session),
+    ) -> User:
+        fields = await PermissionManager(session).get_field_permissions(
+            user_id=current_user.id, resource=resource
+        )
+        if str(action) not in fields.get(field, []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Field access denied: {resource}.{field}.{action}",
+            )
+        return current_user
+
+    return field_permission_checker

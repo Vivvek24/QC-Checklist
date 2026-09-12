@@ -34,20 +34,6 @@ export interface MenuPermissionsResponse {
   permissions: Permission[];
 }
 
-/**
- * The caller's API-scope grants, used to hide controls they could not use.
- *
- * Both shapes are returned because both are needed: `codes` gates a control by
- * permission code, `resource_actions` gates it by the (resource, action) pair the
- * endpoints actually authorise on. Neither is derivable from the other without
- * assuming a naming convention nothing enforces.
- */
-export interface ApiPermissionsResponse {
-  codes: string[];
-  resource_actions: Record<string, PermissionAction[]>;
-  permissions: Permission[];
-}
-
 export interface FieldPermissionsResponse {
   resource: string;
   fields: Record<string, PermissionAction[]>;

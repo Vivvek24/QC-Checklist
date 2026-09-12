@@ -7,19 +7,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import text
 
-from src.infrastructure.database.unit_of_work import UnitOfWork
+from src.infrastructure.database.session import async_session_factory
 from src.infrastructure.security.password_encoder import hash_password
 
 
 async def reset() -> None:
-    async with UnitOfWork() as uow:
-        new_hash = hash_password("1234")
-        await uow.session.execute(
+    async with async_session_factory() as s:
+        new_hash = hash_password("Admin@123")
+        await s.execute(
             text("UPDATE users SET password_hash = :h WHERE username = 'admin'"),
             {"h": new_hash},
         )
-        await uow.commit()
-        print("Admin password reset to: 1234")
+        await s.commit()
+        print("Admin password reset to: Admin@123")
 
 
 if __name__ == "__main__":

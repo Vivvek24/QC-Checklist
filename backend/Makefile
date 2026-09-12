@@ -4,10 +4,15 @@
 # green `make check` locally means a green pipeline.
 #
 # PYTHON defaults to whatever is on PATH; override it to skip activating a venv:
-#   make check PYTHON=venv/Scripts/python.exe     (Windows)
-#   make check PYTHON=venv/bin/python             (Linux/macOS)
+#   make check PYTHON=.venv/Scripts/python.exe    (Windows)
+#   make check PYTHON=.venv/bin/python            (Linux/macOS)
 
 PYTHON ?= python
+
+# Backend dev server port. Moved off the default 8000 so that port stays free
+# for the external/consuming app used while testing the Published Services.
+HOST ?= 0.0.0.0
+PORT ?= 8123
 
 .PHONY: help install lint lint-fix type test test-cov check migrate migration \
         downgrade drift seed run
@@ -67,4 +72,4 @@ seed:  ## Seed the admin user and RBAC permissions
 	$(PYTHON) -m scripts.seed_rbac
 
 run:  ## Start the dev server with reload
-	$(PYTHON) -m uvicorn src.main:app --reload --port 6769
+	$(PYTHON) -m uvicorn src.main:app --reload --host $(HOST) --port $(PORT)

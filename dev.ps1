@@ -1,12 +1,12 @@
 <#
-dev.ps1 — start the QC-Checklist backend and frontend together.
+dev.ps1 — start the Enterprise Core Service backend and frontend together.
 
 Usage (from the repo root):
   .\dev.ps1
 
 Opens two PowerShell windows:
-- Backend : uvicorn src.main:app --reload --port 8000  (http://127.0.0.1:8000)
-- Frontend: npm run dev                                 (Vite, http://localhost:6769)
+- Backend : uvicorn src.main:app --reload --port 8123  (http://127.0.0.1:8123)
+- Frontend: npm run dev                                 (Vite, http://localhost:3000)
 
 Close either window (or Ctrl+C in it) to stop that service.
 
@@ -18,7 +18,7 @@ $root = $PSScriptRoot
 
 # Single-quote the paths so directories with spaces (e.g. "Py Apps") work.
 # Use the venv's python directly so no activation / PATH setup is needed.
-$backendCmd  = "Set-Location -LiteralPath '$root\backend'; .\venv\Scripts\python.exe -m uvicorn src.main:app --reload --port 8000"
+$backendCmd  = "Set-Location -LiteralPath '$root\backend'; .\.venv\Scripts\python.exe -m uvicorn src.main:app --reload --port 8123"
 $frontendCmd = "Set-Location -LiteralPath '$root\frontend'; npm run dev"
 
 Write-Host "Starting backend (uvicorn) and frontend (vite) in separate windows..." -ForegroundColor Cyan
@@ -26,4 +26,4 @@ Write-Host "Starting backend (uvicorn) and frontend (vite) in separate windows..
 Start-Process powershell -ArgumentList '-NoExit', '-Command', $backendCmd
 Start-Process powershell -ArgumentList '-NoExit', '-Command', $frontendCmd
 
-Write-Host "Both services launched. Backend: http://127.0.0.1:8000  Frontend: http://localhost:6769" -ForegroundColor Green
+Write-Host "Both services launched. Backend: http://127.0.0.1:8123  Frontend: http://localhost:3000" -ForegroundColor Green

@@ -4,192 +4,169 @@
  */
 
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+import { MainLayout } from '@app/layouts/MainLayout';
+
 import { LoginPage } from '@features/authentication/pages/LoginPage';
 import { MicrosoftCallbackPage } from '@features/authentication/pages/MicrosoftCallbackPage';
-import { UserListPage } from '@features/user-management/pages/UserListPage';
-import { EmployeeADServicePage } from '@features/service-menu/pages/EmployeeADServicePage';
-import { RolesPage } from '@features/rbac-admin/pages/RolesPage';
+import { DashboardPage } from '@features/dashboard';
+import { EmployeeDirectoryPage } from '@features/employee-directory';
+import { PublishedDarwinAdPage, PublishedEsignerPage } from '@features/published-services';
 import { AuditLogsPage } from '@features/rbac-admin/pages/AuditLogsPage';
-import {
-  WorkflowDefinitionsPage,
-  WorkflowBuilderPage,
-  ApprovalMatrixPage,
-} from '@features/workflow-admin';
-import {
-  CountriesPage,
-  StatesPage,
-  CategoriesOfLawPage,
-  LegislationsPage,
-  RulesPage,
-  TaskTypesPage,
-} from '@features/masters';
-import { MainLayout } from '@app/layouts/MainLayout';
-import { PrivateRoute } from './PrivateRoute';
-import { AuthBootstrap } from './AuthBootstrap';
+import { RolesPage } from '@features/rbac-admin/pages/RolesPage';
+import { DarwinboxServicePage } from '@features/service-menu/pages/DarwinboxServicePage';
+import { EmployeeADServicePage } from '@features/service-menu/pages/EmployeeADServicePage';
+import { EncryptionServicePage } from '@features/service-menu/pages/EncryptionServicePage';
+import { EsignerServicePage } from '@features/service-menu/pages/EsignerServicePage';
+import { LdapServersPage } from '@features/service-menu/pages/LdapServersPage';
+import { LdapServicePage } from '@features/service-menu/pages/LdapServicePage';
+import { UserListPage } from '@features/user-management/pages/UserListPage';
+
 import { NotFoundPage } from '@shared/components/NotFoundPage';
+
+import { AuthBootstrap } from './AuthBootstrap';
+import { PrivateRoute } from './PrivateRoute';
 
 export const AppRouter = () => {
   return (
     <BrowserRouter>
       <AuthBootstrap>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/auth/microsoft/callback" element={<MicrosoftCallbackPage />} />
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/microsoft/callback" element={<MicrosoftCallbackPage />} />
 
-        {/* Protected routes with layout */}
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <MainLayout />
-            </PrivateRoute>
-          }
-        >
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          {/* Protected routes with layout */}
           <Route
-            path="dashboard"
-            element={<div className="p-4"><h2>Dashboard</h2><p>Welcome to QC-Checklist</p></div>}
-          />
-          <Route
-            path="users"
+            path="/"
             element={
-              <PrivateRoute menuKey="users">
-                <UserListPage />
+              <PrivateRoute>
+                <MainLayout />
               </PrivateRoute>
             }
-          />
-          <Route
-            path="roles"
-            element={
-              <PrivateRoute menuKey="roles">
-                <RolesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="audit-logs"
-            element={
-              <PrivateRoute menuKey="audit_logs">
-                <AuditLogsPage />
-              </PrivateRoute>
-            }
-          />
-          {/*
-            Master data. All six share the `masters` menu key, matching the single
-            MENU-scope permission the backend seeds; the per-master API permissions
-            still gate the writes.
-          */}
-          <Route
-            path="masters/countries"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.countries']}>
-                <CountriesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/states"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.states']}>
-                <StatesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/categories-of-law"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.categories_of_law']}>
-                <CategoriesOfLawPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/legislations"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.legislations']}>
-                <LegislationsPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/rules"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.rules']}>
-                <RulesPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="masters/task-types"
-            element={
-              <PrivateRoute menuKey={['masters', 'masters.task_types']}>
-                <TaskTypesPage />
-              </PrivateRoute>
-            }
-          />
+          >
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route
+              path="employees"
+              element={
+                <PrivateRoute menuKey="employees">
+                  <EmployeeDirectoryPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <PrivateRoute menuKey="users">
+                  <UserListPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="roles"
+              element={
+                <PrivateRoute menuKey="roles">
+                  <RolesPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="audit-logs"
+              element={
+                <PrivateRoute menuKey="audit_logs">
+                  <AuditLogsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/employee-ad"
+              element={
+                <PrivateRoute menuKey="services">
+                  <EmployeeADServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/darwinbox"
+              element={
+                <PrivateRoute menuKey="services">
+                  <DarwinboxServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="ldap-servers"
+              element={
+                <PrivateRoute menuKey="ldap">
+                  <LdapServersPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/ldap"
+              element={
+                <PrivateRoute menuKey="services">
+                  <LdapServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/esigner"
+              element={
+                <PrivateRoute menuKey="services">
+                  <EsignerServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/encryption"
+              element={
+                <PrivateRoute menuKey="services">
+                  <EncryptionServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="published-services/darwin-ad"
+              element={
+                <PrivateRoute menuKey="published_services">
+                  <PublishedDarwinAdPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="published-services/esigner"
+              element={
+                <PrivateRoute menuKey="published_services">
+                  <PublishedEsignerPage />
+                </PrivateRoute>
+              }
+            />
+            {/* 404 for any other path while authenticated — stays inside the app shell */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
 
-          {/*
-            The builder is nested under the list path so the breadcrumb reads as a
-            drill-down. The literal "workflows" index route is declared first, so
-            it is never shadowed by the :definitionId segment.
-          */}
+          {/* Unauthorized */}
           <Route
-            path="workflows"
+            path="/unauthorized"
             element={
-              <PrivateRoute menuKey="workflows">
-                <WorkflowDefinitionsPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="workflows/:definitionId"
-            element={
-              <PrivateRoute menuKey="workflows">
-                <WorkflowBuilderPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="approval-matrix"
-            element={
-              <PrivateRoute menuKey="workflows">
-                <ApprovalMatrixPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="services/employee-ad"
-            element={
-              <PrivateRoute menuKey="services">
-                <EmployeeADServicePage />
-              </PrivateRoute>
-            }
-          />
-          {/* 404 for any other path while authenticated — stays inside the app shell */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-
-        {/* Unauthorized */}
-        <Route
-          path="/unauthorized"
-          element={
-            <div className="flex align-items-center justify-content-center min-h-screen">
-              <div className="text-center">
-                <h1 className="text-4xl text-red-500">403</h1>
-                <p className="text-600">You don't have permission to access this page.</p>
+              <div className="flex align-items-center justify-content-center min-h-screen">
+                <div className="text-center">
+                  <h1 className="text-4xl text-red-500">403</h1>
+                  <p className="text-600">You don't have permission to access this page.</p>
+                </div>
               </div>
-            </div>
-          }
-        />
+            }
+          />
 
-        {/*
+          {/*
           No top-level catch-all: unknown paths fall through to the protected
           "/" route, which shows the in-app 404 when authenticated or redirects
           to /login (via PrivateRoute) when not. This prevents unknown URLs from
           logging authenticated users out.
         */}
-      </Routes>
+        </Routes>
       </AuthBootstrap>
     </BrowserRouter>
   );

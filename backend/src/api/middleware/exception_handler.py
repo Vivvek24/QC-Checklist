@@ -125,5 +125,3 @@ class ExceptionHandlerMiddleware(BaseHTTPMiddleware):
                 "correlation_id": correlation_id,
             },
         )
-
-

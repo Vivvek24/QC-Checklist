@@ -42,4 +42,3 @@ class ErrorResponse(BaseModel):
     success: bool = Field(default=False)
     message: str = Field(..., description="Error message")
     correlation_id: str = Field(default="", description="Request correlation ID")
-    

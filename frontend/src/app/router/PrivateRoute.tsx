@@ -5,18 +5,12 @@
  */
 
 import { Navigate, useLocation } from 'react-router-dom';
+
 import { useAppSelector } from '@app/store';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
-  /**
-   * Menu key(s) required to reach the route. An array means *all* of them are
-   * required, which is how a nested area is gated: the masters screens ask for
-   * both the section key (`masters`) and their own (`masters.countries`), so
-   * revoking the section hides every screen under it while revoking one child
-   * hides only that screen.
-   */
-  menuKey?: string | string[];
+  menuKey?: string;
 }
 
 export const PrivateRoute = ({ children, menuKey }: PrivateRouteProps) => {
@@ -36,14 +30,13 @@ export const PrivateRoute = ({ children, menuKey }: PrivateRouteProps) => {
     return <Navigate to="/login" replace />;
   }
 
-  // If menu key(s) are specified, check RBAC permissions
+  // If a menuKey is specified, check RBAC permissions
   if (menuKey) {
     if (!rbacLoaded) {
       // Still loading permissions — show nothing briefly
       return null;
     }
-    const required = Array.isArray(menuKey) ? menuKey : [menuKey];
-    if (!required.every((key) => menuKeys.includes(key))) {
+    if (!menuKeys.includes(menuKey)) {
       return <Navigate to="/unauthorized" replace />;
     }
   }

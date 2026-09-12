@@ -1,16 +1,24 @@
-"""SQLAlchemy ORM model for UserDetails. One-to-one with users table."""
+"""
+SQLAlchemy ORM model for the UserDetails entity.
+Maps to the 'user_details' table. One-to-one with users table.
+"""
 
-from sqlalchemy import BigInteger, ForeignKey, String
+import uuid
+
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.database.models.base_model import BaseModel
 
 
 class UserDetailsModel(BaseModel):
+    """User details database table — stores Darwin AD employee data."""
+
     __tablename__ = "user_details"
 
-    user_id: Mapped[int] = mapped_column(
-        BigInteger,
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,

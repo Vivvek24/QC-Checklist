@@ -1,11 +1,11 @@
 /**
- * Turns an axios error from the workflow endpoints into one readable line.
+ * Turns an axios error from this service's endpoints into one readable line.
  *
  * The backend speaks two error shapes: domain failures come back as
  * `{ success, message, correlation_id }` from the exception middleware, while
  * validation failures are FastAPI's `detail` — either a string or an array of
  * Pydantic error objects. All three are flattened here so pages do not each
- * re-implement the unwrapping.
+ * re-implement the unwrapping (and so no page needs `catch (error: any)`).
  */
 
 interface PydanticError {

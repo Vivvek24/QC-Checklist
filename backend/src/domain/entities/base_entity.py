@@ -1,11 +1,11 @@
 """
 Base domain entity with audit fields.
 All domain entities inherit from this to ensure consistent audit tracking.
-Primary key is int (BigInt auto-increment from DB), default 0 before persist.
 """
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 
 @dataclass
@@ -13,12 +13,15 @@ class BaseEntity:
     """
     Base entity providing identity and audit fields.
 
-    id is set by the database (BIGSERIAL). The default of 0 is a sentinel
-    meaning "not yet persisted". Repositories flush immediately after add()
-    so callers always receive the DB-assigned id.
+    Attributes:
+        id: Unique identifier (UUID).
+        created_by: Username or system identifier that created the entity.
+        created_date: UTC timestamp of creation.
+        modified_by: Username or system identifier that last modified the entity.
+        modified_date: UTC timestamp of last modification.
     """
 
-    id: int = field(default=0)
+    id: UUID = field(default_factory=uuid4)
     created_by: str = field(default="system")
     created_date: datetime = field(default_factory=lambda: datetime.now(UTC))
     modified_by: str = field(default="system")

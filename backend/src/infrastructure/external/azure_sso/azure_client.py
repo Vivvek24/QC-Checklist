@@ -47,7 +47,7 @@ class AzureSsoClient:
         self._client_id = settings.AZURE_CLIENT_ID
         self._client_secret = settings.AZURE_CLIENT_SECRET
         self._tenant_id = settings.AZURE_TENANT_ID
-        self._redirect_uri = settings.AZURE_REDIRECT_URI or "http://localhost:6769/auth/microsoft/callback"
+        self._redirect_uri = settings.AZURE_REDIRECT_URI or "http://localhost:3000/auth/microsoft/callback"
 
     @property
     def is_configured(self) -> bool:
@@ -121,6 +121,8 @@ class AzureSsoClient:
                     headers={"Authorization": f"Bearer {ms_access_token}"},
                 )
                 graph_resp.raise_for_status()
+                # httpx types .json() as Any; bind it to the declared shape so the
+                # method's return annotation is actually enforced by the checker.
                 profile: dict[str, Any] = graph_resp.json()
                 return profile
 

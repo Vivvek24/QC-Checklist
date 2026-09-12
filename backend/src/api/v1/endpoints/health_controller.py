@@ -26,4 +26,3 @@ async def readiness() -> dict[str, Any]:
 async def startup() -> dict[str, Any]:
     """Indicates the application has completed initialization."""
     return {"status": "started"}
-

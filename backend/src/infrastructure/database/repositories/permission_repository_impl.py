@@ -1,4 +1,9 @@
-"""Permission repository implementation."""
+"""
+Permission repository implementation (Adapter).
+Implements IPermissionRepository using SQLAlchemy async.
+"""
+
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +14,12 @@ from src.infrastructure.database.models.role_model import PermissionModel
 
 
 class PermissionRepositoryImpl(IPermissionRepository):
+    """Concrete implementation of permission persistence using SQLAlchemy."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_id(self, permission_id: int) -> Permission | None:
+    async def get_by_id(self, permission_id: UUID) -> Permission | None:
         model = await self._session.get(PermissionModel, permission_id)
         return self._to_entity(model) if model else None
 
@@ -33,6 +39,7 @@ class PermissionRepositoryImpl(IPermissionRepository):
 
     async def create(self, permission: Permission) -> Permission:
         model = PermissionModel(
+            id=permission.id,
             code=permission.code,
             name=permission.name,
             description=permission.description,
@@ -49,6 +56,7 @@ class PermissionRepositoryImpl(IPermissionRepository):
 
     @staticmethod
     def _to_entity(model: PermissionModel) -> Permission:
+        """Map ORM model to domain entity."""
         return Permission(
             id=model.id,
             code=model.code,

@@ -12,14 +12,12 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from src.config.settings import settings
-from src.infrastructure.database.models.approval_matrix_model import (  # noqa: F401
-    ApprovalAssignmentModel,
-    ApprovalMatrixModel,
-    ApprovalRuleModel,
-    ApprovalTaskModel,
-)
 from src.infrastructure.database.models.audit_log_model import AuditLogModel  # noqa: F401
 from src.infrastructure.database.models.base_model import Base
+from src.infrastructure.database.models.darwinbox_employee_model import (
+    DarwinboxEmployeeModel,  # noqa: F401
+)
+from src.infrastructure.database.models.ldap_config_model import LdapConfigModel  # noqa: F401
 from src.infrastructure.database.models.role_model import (  # noqa: F401
     PermissionModel,
     RoleAssignmentModel,
@@ -28,14 +26,9 @@ from src.infrastructure.database.models.role_model import (  # noqa: F401
 )
 from src.infrastructure.database.models.tenant_model import TenantModel  # noqa: F401
 from src.infrastructure.database.models.user_details_model import UserDetailsModel  # noqa: F401
+
+# Import all models so Alembic detects them
 from src.infrastructure.database.models.user_model import UserModel  # noqa: F401
-from src.infrastructure.database.models.workflow_model import (  # noqa: F401
-    WorkflowDefinitionModel,
-    WorkflowHistoryModel,
-    WorkflowInstanceModel,
-    WorkflowStatusModel,
-    WorkflowTransitionModel,
-)
 
 # Alembic Config object
 config = context.config

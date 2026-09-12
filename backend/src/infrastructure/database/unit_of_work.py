@@ -12,8 +12,8 @@ Two ways to use it:
    request, where `get_db_session` does not apply::
 
        async with UnitOfWork() as uow:
-           repo = uow.repository(CountryRepositoryImpl)
-           await repo.create(country)
+           repo = uow.repository(UserRepositoryImpl)
+           await repo.create(user)
            await uow.commit()          # explicit; nothing is committed for you
 
 2. Attached to an existing session — for request handlers that need savepoints

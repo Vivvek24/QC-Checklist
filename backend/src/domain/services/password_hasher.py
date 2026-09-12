@@ -1,9 +1,9 @@
 """
 Password hasher interface (Port).
 
-The algorithm is an infrastructure concern (currently bcrypt via passlib), but
-the application layer needs to hash new passwords. Depending on this interface
-keeps that dependency pointing inwards.
+The algorithm is an infrastructure concern (currently bcrypt), but the
+application layer needs to hash new passwords. Depending on this interface keeps
+that dependency pointing inwards.
 """
 
 from abc import ABC, abstractmethod

@@ -17,11 +17,14 @@ To set the current actor context (who is making the change):
 
 import json
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import event, inspect
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.unitofwork import UOWTransaction
 
 from src.infrastructure.database.audit_context import get_audit_context
 from src.infrastructure.database.models.audit_log_model import AuditLogModel
@@ -98,12 +101,13 @@ def _create_audit_entry(
         extra_data = json.dumps({"changed_columns": changed_columns})
 
     return AuditLogModel(
-        actor_id=ctx.actor_id,
+        id=uuid4(),
+        actor_id=str(ctx.actor_id) if ctx.actor_id else None,
         actor_username=ctx.actor_username,
         action=action,
         resource_type=table_name,
         resource_id=resource_id,
-        tenant_id=ctx.tenant_id,
+        tenant_id=str(ctx.tenant_id) if ctx.tenant_id else None,
         old_value=json.dumps(old_value) if old_value else None,
         new_value=json.dumps(new_value) if new_value else None,
         ip_address=ctx.ip_address,
@@ -123,12 +127,19 @@ def _get_resource_id(instance: BaseModel) -> str:
     return ""
 
 
-def _before_flush(session: Session, flush_context: Any, instances: Any) -> None:
+def _before_flush(
+    session: Session,
+    flush_context: UOWTransaction,
+    instances: Sequence[Any] | None,
+) -> None:
     """
     SQLAlchemy event handler: captures audit snapshots before flush.
 
     Iterates over new, dirty, and deleted objects in the session and
     creates audit log entries with before/after state.
+
+    `flush_context` and `instances` are unused but must stay in the signature —
+    SQLAlchemy calls this positionally with all three arguments.
     """
     audit_entries: list[AuditLogModel] = []
 

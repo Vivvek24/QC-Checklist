@@ -1,1 +1,1 @@
-// Dashboard feature module barrel export
+export { DashboardPage } from './pages/DashboardPage';

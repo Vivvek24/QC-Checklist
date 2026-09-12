@@ -1,32 +1,28 @@
 /**
- * Main application layout — Sakai-style with QC-Checklist branding.
+ * Main application layout — Sakai-style with Emcure branding.
  * Collapsible sidebar, topbar with profile menu, breadcrumbs.
  */
 
-import { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Button } from 'primereact/button';
-import { Avatar } from 'primereact/avatar';
-import { Menu } from 'primereact/menu';
-import { Badge } from 'primereact/badge';
-import { Tooltip } from 'primereact/tooltip';
-import { useRef } from 'react';
-import { useAppDispatch, useAppSelector } from '@app/store';
-import { logoutThunk } from '@features/authentication/store/authSlice';
-import { useApiPermissions, useMenuPermissions } from '@core/rbac/usePermissions';
+import { useState, useRef } from 'react';
 
-interface NavItem {
-  label: string;
-  icon: string;
-  path: string;
-  visible?: boolean;
-  section?: string;
-  /**
-   * Menu key(s) required to show the item. An array means all are required, so a
-   * master screen asks for both the section key and its own.
-   */
-  menuKey?: string | string[];
-}
+import { Avatar } from 'primereact/avatar';
+import { Badge } from 'primereact/badge';
+import { Button } from 'primereact/button';
+import { Menu } from 'primereact/menu';
+import { Tooltip } from 'primereact/tooltip';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+
+import {
+  NAV_ITEMS,
+  filterNavItemsByRbac,
+  groupNavItemsBySection,
+  type NavItem,
+} from '@app/navigation/navConfig';
+import { useAppDispatch, useAppSelector } from '@app/store';
+
+import { useMenuPermissions } from '@core/rbac/usePermissions';
+
+import { logoutThunk } from '@features/authentication/store/authSlice';
 
 export const MainLayout = () => {
   const dispatch = useAppDispatch();
@@ -35,34 +31,12 @@ export const MainLayout = () => {
   const { user } = useAppSelector((state) => state.auth);
   const userMenu = useRef<Menu>(null);
   const { menuKeys, isLoaded: rbacLoaded } = useMenuPermissions();
-  // Loaded once here so that permission gates on the pages below resolve on first
-  // paint instead of each page fetching them on mount.
-  useApiPermissions();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const navItems: NavItem[] = [
-    { label: 'Dashboard', icon: 'pi pi-th-large', path: '/dashboard', section: 'Main', menuKey: 'dashboard' },
-    { label: 'Users', icon: 'pi pi-users', path: '/users', section: 'Management', menuKey: 'users' },
-    { label: 'Roles & Permissions', icon: 'pi pi-shield', path: '/roles', section: 'Management', menuKey: 'roles' },
-    { label: 'Audit Logs', icon: 'pi pi-history', path: '/audit-logs', section: 'Management', menuKey: 'audit_logs' },
-    { label: 'Countries', icon: 'pi pi-globe', path: '/masters/countries', section: 'Masters', menuKey: ['masters', 'masters.countries'] },
-    { label: 'States', icon: 'pi pi-map', path: '/masters/states', section: 'Masters', menuKey: ['masters', 'masters.states'] },
-    { label: 'Categories of Law', icon: 'pi pi-book', path: '/masters/categories-of-law', section: 'Masters', menuKey: ['masters', 'masters.categories_of_law'] },
-    { label: 'Legislations', icon: 'pi pi-file', path: '/masters/legislations', section: 'Masters', menuKey: ['masters', 'masters.legislations'] },
-    { label: 'Rules', icon: 'pi pi-list-check', path: '/masters/rules', section: 'Masters', menuKey: ['masters', 'masters.rules'] },
-    { label: 'Task Types', icon: 'pi pi-tags', path: '/masters/task-types', section: 'Masters', menuKey: ['masters', 'masters.task_types'] },
-    { label: 'Workflows', icon: 'pi pi-sitemap', path: '/workflows', section: 'Workflow', menuKey: 'workflows' },
-    { label: 'Approval Matrix', icon: 'pi pi-check-square', path: '/approval-matrix', section: 'Workflow', menuKey: 'workflows' },
-    { label: 'Employee AD', icon: 'pi pi-id-card', path: '/services/employee-ad', section: 'Services', menuKey: 'services' },
-  ];
+  const navItems: NavItem[] = NAV_ITEMS;
 
   // Filter items based on RBAC menu permissions
-  const visibleItems = navItems.filter((item) => {
-    if (!item.menuKey) return item.visible !== false;
-    if (!rbacLoaded) return false;
-    const required = Array.isArray(item.menuKey) ? item.menuKey : [item.menuKey];
-    return required.every((key) => menuKeys.includes(key));
-  });
+  const visibleItems = filterNavItemsByRbac(navItems, menuKeys, rbacLoaded);
 
   const userMenuItems = [
     {
@@ -87,12 +61,7 @@ export const MainLayout = () => {
   ];
 
   // Group items by section
-  const sections = visibleItems.reduce<Record<string, NavItem[]>>((acc, item) => {
-    const section = item.section || 'Other';
-    if (!acc[section]) acc[section] = [];
-    acc[section].push(item);
-    return acc;
-  }, {});
+  const sections = groupNavItemsBySection(visibleItems);
 
   // Get current page label for breadcrumb
   const currentPage = navItems.find((i) => i.path === location.pathname)?.label || '';
@@ -100,11 +69,14 @@ export const MainLayout = () => {
   const sidebarWidth = sidebarCollapsed ? '60px' : '220px';
 
   return (
-    <div className="flex" style={{ height: '100vh', background: 'var(--color-surface-ground)', overflow: 'hidden' }}>
+    <div
+      className="flex"
+      style={{ height: '100vh', overflow: 'hidden', background: 'var(--color-surface-ground)' }}
+    >
       {/* ─── Sidebar ─── */}
       <aside
         className="em-sidebar flex-shrink-0 flex flex-column transition-all transition-duration-200"
-        style={{ width: sidebarWidth, height: '100vh', overflow: 'hidden' }}
+        style={{ width: sidebarWidth, height: '100%', overflow: 'hidden' }}
         aria-label="Sidebar navigation"
       >
         {/* Logo area */}
@@ -114,7 +86,7 @@ export const MainLayout = () => {
         >
           {!sidebarCollapsed && (
             <span className="font-bold text-lg" style={{ color: 'var(--color-primary)' }}>
-              QC-Checklist
+              EMCURE
             </span>
           )}
           <Button
@@ -136,7 +108,11 @@ export const MainLayout = () => {
               {!sidebarCollapsed && (
                 <div
                   className="text-xs font-semibold uppercase mb-1 px-2"
-                  style={{ color: 'var(--color-text-muted)', letterSpacing: '0.05em', fontSize: '0.6rem' }}
+                  style={{
+                    color: 'var(--color-text-muted)',
+                    letterSpacing: '0.05em',
+                    fontSize: '0.6rem',
+                  }}
                 >
                   {section}
                 </div>
@@ -151,7 +127,11 @@ export const MainLayout = () => {
                     style={{
                       background: isActive ? 'var(--color-primary-50)' : 'transparent',
                       borderRadius: 'var(--radius-md)',
-                      borderLeft: !sidebarCollapsed ? (isActive ? '3px solid var(--color-primary)' : '3px solid transparent') : undefined,
+                      borderLeft: !sidebarCollapsed
+                        ? isActive
+                          ? '3px solid var(--color-primary)'
+                          : '3px solid transparent'
+                        : undefined,
                       color: isActive ? 'var(--color-primary)' : 'var(--color-text-primary)',
                       fontWeight: isActive ? 600 : 400,
                       fontSize: '12px',
@@ -180,7 +160,7 @@ export const MainLayout = () => {
       {sidebarCollapsed && <Tooltip target="[data-pr-tooltip]" />}
 
       {/* ─── Main Content Area ─── */}
-      <div className="flex-1 flex flex-column" style={{ minWidth: 0, height: '100vh', overflow: 'hidden' }}>
+      <div className="flex-1 flex flex-column" style={{ minWidth: 0, minHeight: 0 }}>
         {/* Top Bar */}
         <header
           className="em-topbar flex align-items-center justify-content-between px-3"
@@ -194,8 +174,13 @@ export const MainLayout = () => {
             </span>
             {currentPage && (
               <>
-                <span className="text-400" style={{ fontSize: '11px' }}>/</span>
-                <span className="font-medium" style={{ fontSize: '12px', color: 'var(--color-text-primary)' }}>
+                <span className="text-400" style={{ fontSize: '11px' }}>
+                  /
+                </span>
+                <span
+                  className="font-medium"
+                  style={{ fontSize: '12px', color: 'var(--color-text-primary)' }}
+                >
                   {currentPage}
                 </span>
               </>
@@ -213,7 +198,11 @@ export const MainLayout = () => {
               className="p-overlay-badge"
               style={{ width: '2rem', height: '2rem' }}
             >
-              <Badge value="3" severity="danger" style={{ fontSize: '0.6rem', minWidth: '1rem', height: '1rem', lineHeight: '1rem' }} />
+              <Badge
+                value="3"
+                severity="danger"
+                style={{ fontSize: '0.6rem', minWidth: '1rem', height: '1rem', lineHeight: '1rem' }}
+              />
             </Button>
 
             <Menu model={userMenuItems} popup ref={userMenu} />
@@ -229,7 +218,13 @@ export const MainLayout = () => {
                 label={user?.username?.charAt(0).toUpperCase() || 'U'}
                 shape="circle"
                 size="normal"
-                style={{ background: 'var(--color-primary)', color: '#fff', width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }}
+                style={{
+                  background: 'var(--color-primary)',
+                  color: '#fff',
+                  width: '1.75rem',
+                  height: '1.75rem',
+                  fontSize: '0.75rem',
+                }}
               />
               <span
                 className="hidden lg:inline font-medium"

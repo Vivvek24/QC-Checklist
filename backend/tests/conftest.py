@@ -39,6 +39,11 @@ from src.infrastructure.security.password_encoder import hash_password
 # Note: is_validate_ad=False keeps AuthManager on the local bcrypt path.
 # With the default (True) it would call the external Darwin AD service and
 # unit tests would depend on the network.
+#
+# There is no `role` argument: the column was dropped from users (migration
+# c9d4e2f5a1b7) in favour of the role_assignments table, and User has had no
+# such field since. Passing one raised TypeError at fixture setup, which is
+# what erroring every auth test that touched these fixtures.
 
 
 @pytest.fixture
@@ -98,11 +103,11 @@ def _forbid_real_http(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Fail any test that tries to open a real outbound HTTP connection.
 
-    This is a safety net, not a convenience. `EMPLOYEE_AD_BASE_URL` defaults to a
-    live internal production host, so a test that forgets to stub is not just
-    slow — it issues real requests against production from whatever machine or CI
-    runner is running the suite. That has already happened once in this suite's
-    history.
+    This is a safety net, not a convenience. `EMPLOYEE_AD_BASE_URL`,
+    `DARWINBOX_BASE_URL` and `ESIGNER_BASE_URL` all default to (or are configured
+    with) live internal hosts, so a test that forgets to stub is not just slow —
+    it issues real requests against production from whatever machine or CI runner
+    is running the suite.
 
     Only the real network transports are blocked. `MockTransport` (used by
     `stub_http`) and `ASGITransport` (used by the `client` fixtures to call the
@@ -140,12 +145,11 @@ def stub_http(
     """
     Route every httpx.AsyncClient through an in-process MockTransport.
 
-    The external adapters build their own `httpx.AsyncClient` inside each method,
-    so there is no transport to inject. Patching the class on the `httpx` module
-    is what makes them testable without touching the network — and the default
-    base URLs in settings point at real production hosts, so an un-stubbed call
-    is not merely slow, it is a live request. Nothing here can escape the
-    transport.
+    The external adapters (`darwinbox_client`, `employee_ad_client`,
+    `esigner_client`, `azure_client`) build their own `httpx.AsyncClient` inside
+    each method, so there is no transport to inject. Patching the class on the
+    `httpx` module is what makes them testable without touching the network.
+    Nothing here can escape the transport.
 
     Usage:
         requests = stub_http(lambda req: httpx.Response(200, json={"ok": True}))
@@ -166,7 +170,7 @@ def stub_http(
 
         def _factory(*args: object, **kwargs: object) -> httpx.AsyncClient:
             # `verify` is meaningless against a mock transport and httpx warns
-            # when both are supplied.
+            # when both are supplied. darwinbox_client passes verify=False.
             kwargs.pop("verify", None)
             kwargs["transport"] = httpx.MockTransport(_recording)
             return real_client(*args, **kwargs)  # type: ignore[arg-type]
@@ -217,7 +221,9 @@ async def _ensure_database_exists(url: str) -> None:
 
     conn = await asyncpg.connect(admin_dsn)
     try:
-        exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", name)
+        exists = await conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1", name
+        )
         if not exists:
             await conn.execute(f'CREATE DATABASE "{name}"')
     finally:
@@ -340,49 +346,41 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         app.dependency_overrides.clear()
 
 
-# Master-data resources guarded by API permissions, used to seed the admin role.
-MASTER_RESOURCES = (
-    "countries",
-    "states",
-    "categories_of_law",
-    "legislations",
-    "rules",
-    "task_types",
-)
+# Resources guarded by (resource, action) permission pairs. These mirror
+# scripts/seed_rbac.py so an API test sees the same shape as a real deployment.
+CRUD_RESOURCES = ("users", "roles")
 CRUD_ACTIONS = ("READ", "CREATE", "UPDATE", "DELETE")
 
-# Non-master resources that are also guarded by (resource, action) pairs.
-OTHER_CRUD_RESOURCES = (
-    "users",
-    "workflows",
-    "workflow_instances",
-    "approval_matrices",
-)
-
-# The RBAC and audit endpoints guard with `require_permission(code)` — matched on
-# the permission code alone — rather than the (resource, action) pair the masters
-# use. They therefore need seeding by explicit code.
+# The RBAC, audit and service endpoints guard with `require_permission(code)` —
+# matched on the permission code alone — rather than the (resource, action) pair.
+# They therefore need seeding by explicit code.
 #
-# One MENU and one FIELD permission are included so the `my-permissions/menu`
-# and `my-permissions/fields` endpoints have something to resolve.
+# MENU and FIELD permissions are included so the `my-permissions/menu` and
+# `my-permissions/fields` endpoints have something to resolve.
 # Tuples are (code, scope, resource, action).
 CODE_PERMISSIONS = (
+    ("users.export", "API", "users", "EXPORT"),
     ("users.import", "API", "users", "IMPORT"),
-    ("services.employee_ad", "API", "services", "READ"),
+    ("roles.assign", "API", "roles", "EXECUTE"),
     ("rbac.read", "API", "rbac", "READ"),
     ("rbac.create", "API", "rbac", "CREATE"),
     ("rbac.update", "API", "rbac", "UPDATE"),
     ("audit.read", "API", "audit_logs", "READ"),
-    ("menu.masters", "MENU", "masters", "READ"),
-    # One per master screen, plus the section key above. Mirrors seed_rbac so a
-    # test asserting on menu keys sees the same shape as a real deployment.
-    ("menu.masters.countries", "MENU", "masters.countries", "READ"),
-    ("menu.masters.states", "MENU", "masters.states", "READ"),
-    ("menu.masters.categories_of_law", "MENU", "masters.categories_of_law", "READ"),
-    ("menu.masters.legislations", "MENU", "masters.legislations", "READ"),
-    ("menu.masters.rules", "MENU", "masters.rules", "READ"),
-    ("menu.masters.task_types", "MENU", "masters.task_types", "READ"),
-    ("menu.workflows", "MENU", "workflows", "READ"),
+    # One per outbound/integration service this app exposes.
+    ("services.employee_ad", "API", "services", "EXECUTE"),
+    ("services.darwinbox", "API", "services", "EXECUTE"),
+    ("services.ldap", "API", "services", "EXECUTE"),
+    ("services.esigner", "API", "services", "EXECUTE"),
+    ("services.encryption", "API", "services", "EXECUTE"),
+    # Menu keys, matching seed_rbac's set.
+    ("menu.dashboard", "MENU", "dashboard", "READ"),
+    ("menu.users", "MENU", "users", "READ"),
+    ("menu.roles", "MENU", "roles", "READ"),
+    ("menu.audit_logs", "MENU", "audit_logs", "READ"),
+    ("menu.services", "MENU", "services", "READ"),
+    ("menu.published_services", "MENU", "published_services", "READ"),
+    ("menu.employees", "MENU", "employees", "READ"),
+    ("menu.ldap", "MENU", "ldap", "READ"),
     ("users.salary.read", "FIELD", "users.salary", "READ"),
 )
 
@@ -432,12 +430,19 @@ async def admin_user(db_session: AsyncSession) -> User:
 
     specs = [
         (f"{resource}.{action.lower()}", "API", resource, action)
-        for resource in MASTER_RESOURCES + OTHER_CRUD_RESOURCES
+        for resource in CRUD_RESOURCES
         for action in CRUD_ACTIONS
     ]
     specs.extend(CODE_PERMISSIONS)
 
+    # De-duplicate: several service codes share the (services, EXECUTE) pair, and
+    # `code` is unique, so build one row per code.
+    seen: set[str] = set()
     for code, scope, resource, action in specs:
+        if code in seen:
+            continue
+        seen.add(code)
+
         permission = PermissionModel(
             id=uuid4(),
             code=code,

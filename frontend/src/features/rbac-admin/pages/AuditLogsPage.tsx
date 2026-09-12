@@ -3,7 +3,9 @@
  * Displays all RBAC-related audit events with filtering.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { Button } from 'primereact/button';
 import { Column } from 'primereact/column';
 import { DataTable, type DataTablePageEvent } from 'primereact/datatable';
 import { Dropdown } from 'primereact/dropdown';
@@ -11,9 +13,11 @@ import { InputText } from 'primereact/inputtext';
 import { Tag } from 'primereact/tag';
 import { Toast } from 'primereact/toast';
 import { Toolbar } from 'primereact/toolbar';
-import { Button } from 'primereact/button';
+
 import { ContentViewerDialog } from '@shared/components/ContentViewerDialog';
-import { rbacAdminApi } from '../api/rbacAdminApi';
+import { extractApiError } from '@shared/utils/apiError';
+
+import { rbacAdminApi, type AuditLogQueryParams } from '../api/rbacAdminApi';
 import type { AuditLogEntry } from '../models/rbac-admin.types';
 
 const ACTION_OPTIONS = [
@@ -58,14 +62,14 @@ export const AuditLogsPage = () => {
   const [viewerContent, setViewerContent] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState('');
 
-  useEffect(() => {
-    loadLogs();
-  }, [first, rows, actionFilter, resourceFilter, actorFilter]);
-
-  const loadLogs = async () => {
+  // useCallback so the effect below can depend on it honestly. Previously the
+  // effect called loadLogs while omitting it from the dependency array, which
+  // only happened to work because loadLogs closed over the same filters the
+  // array already listed.
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, any> = {
+      const params: AuditLogQueryParams = {
         skip: first,
         limit: rows,
       };
@@ -76,17 +80,21 @@ export const AuditLogsPage = () => {
       const data = await rbacAdminApi.listAuditLogs(params);
       setLogs(data.logs);
       setTotalRecords(data.total);
-    } catch (error: any) {
+    } catch (error) {
       toast.current?.show({
         severity: 'error',
         summary: 'Error',
-        detail: error.response?.data?.detail || 'Failed to load audit logs',
+        detail: extractApiError(error, 'Failed to load audit logs'),
         life: 5000,
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [first, rows, actionFilter, resourceFilter, actorFilter]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const onPage = (event: DataTablePageEvent) => {
     setFirst(event.first);
@@ -97,9 +105,17 @@ export const AuditLogsPage = () => {
 
   const actionTemplate = (log: AuditLogEntry) => {
     let severity: 'success' | 'info' | 'warning' | 'danger' = 'info';
-    if (log.action.includes('CREATED') || log.action.includes('GRANTED') || log.action === 'LOGIN_SUCCESS') {
+    if (
+      log.action.includes('CREATED') ||
+      log.action.includes('GRANTED') ||
+      log.action === 'LOGIN_SUCCESS'
+    ) {
       severity = 'success';
-    } else if (log.action.includes('REVOKED') || log.action.includes('DELETED') || log.action === 'LOGIN_FAILED') {
+    } else if (
+      log.action.includes('REVOKED') ||
+      log.action.includes('DELETED') ||
+      log.action === 'LOGIN_FAILED'
+    ) {
       severity = 'danger';
     } else if (log.action.includes('UPDATED') || log.action.includes('ASSIGNED')) {
       severity = 'warning';
@@ -124,14 +140,23 @@ export const AuditLogsPage = () => {
       // Combine old + new values for a complete diff view
       const combined: Record<string, unknown> = {};
       if (log.old_value) {
-        try { combined.before = JSON.parse(log.old_value); } catch { combined.before = log.old_value; }
+        try {
+          combined.before = JSON.parse(log.old_value);
+        } catch {
+          combined.before = log.old_value;
+        }
       }
       if (log.new_value) {
-        try { combined.after = JSON.parse(log.new_value); } catch { combined.after = log.new_value; }
+        try {
+          combined.after = JSON.parse(log.new_value);
+        } catch {
+          combined.after = log.new_value;
+        }
       }
-      const display = Object.keys(combined).length === 1
-        ? JSON.stringify(Object.values(combined)[0])
-        : JSON.stringify(combined);
+      const display =
+        Object.keys(combined).length === 1
+          ? JSON.stringify(Object.values(combined)[0])
+          : JSON.stringify(combined);
 
       setViewerContent(display);
       setViewerTitle(`${log.action} — ${log.resource_type}`);
@@ -154,7 +179,12 @@ export const AuditLogsPage = () => {
       >
         <code
           className="text-xs text-600 block"
-          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'calc(100% - 1.5rem)' }}
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 'calc(100% - 1.5rem)',
+          }}
         >
           {preview}
         </code>
@@ -170,7 +200,10 @@ export const AuditLogsPage = () => {
       <Dropdown
         value={actionFilter}
         options={ACTION_OPTIONS}
-        onChange={(e) => { setFirst(0); setActionFilter(e.value); }}
+        onChange={(e) => {
+          setFirst(0);
+          setActionFilter(e.value);
+        }}
         placeholder="Filter by Action"
         className="w-12rem"
         aria-label="Filter by action type"
@@ -178,7 +211,10 @@ export const AuditLogsPage = () => {
       <Dropdown
         value={resourceFilter}
         options={RESOURCE_OPTIONS}
-        onChange={(e) => { setFirst(0); setResourceFilter(e.value); }}
+        onChange={(e) => {
+          setFirst(0);
+          setResourceFilter(e.value);
+        }}
         placeholder="Filter by Resource"
         className="w-12rem"
         aria-label="Filter by resource type"
@@ -186,7 +222,12 @@ export const AuditLogsPage = () => {
       <InputText
         value={actorFilter}
         onChange={(e) => setActorFilter(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') { setFirst(0); loadLogs(); } }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            setFirst(0);
+            loadLogs();
+          }
+        }}
         placeholder="Filter by actor..."
         className="w-12rem"
         aria-label="Filter by actor username"
@@ -210,7 +251,8 @@ export const AuditLogsPage = () => {
       <div className="mb-4">
         <h2 className="text-2xl font-semibold text-900 m-0">Audit Logs</h2>
         <p className="text-600 mt-1 mb-0">
-          View all security-relevant operations: role changes, permission grants, and authentication events
+          View all security-relevant operations: role changes, permission grants, and authentication
+          events
         </p>
       </div>
 
@@ -232,11 +274,39 @@ export const AuditLogsPage = () => {
           tableStyle={{ width: '100%', tableLayout: 'auto' }}
         >
           <Column header="Time" body={dateTemplate} style={{ whiteSpace: 'nowrap', width: '1%' }} />
-          <Column field="actor_username" header="Actor" sortable style={{ whiteSpace: 'nowrap', width: '1%' }} />
-          <Column header="Action" body={actionTemplate} style={{ whiteSpace: 'nowrap', width: '1%' }} />
-          <Column field="resource_type" header="Resource" style={{ whiteSpace: 'nowrap', width: '1%' }} />
-          <Column field="resource_id" header="Resource ID" style={{ whiteSpace: 'nowrap', width: '1%' }} />
-          <Column header="Details" body={changeTemplate} style={{ width: '300px', minWidth: '300px', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} />
+          <Column
+            field="actor_username"
+            header="Actor"
+            sortable
+            style={{ whiteSpace: 'nowrap', width: '1%' }}
+          />
+          <Column
+            header="Action"
+            body={actionTemplate}
+            style={{ whiteSpace: 'nowrap', width: '1%' }}
+          />
+          <Column
+            field="resource_type"
+            header="Resource"
+            style={{ whiteSpace: 'nowrap', width: '1%' }}
+          />
+          <Column
+            field="resource_id"
+            header="Resource ID"
+            style={{ whiteSpace: 'nowrap', width: '1%' }}
+          />
+          <Column
+            header="Details"
+            body={changeTemplate}
+            style={{
+              width: '300px',
+              minWidth: '300px',
+              maxWidth: '300px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          />
           <Column field="ip_address" header="IP" style={{ whiteSpace: 'nowrap', width: '1%' }} />
         </DataTable>
       </div>

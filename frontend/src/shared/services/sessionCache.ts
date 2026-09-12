@@ -13,9 +13,9 @@
  * sessionStorage is per-tab and cleared when the tab closes.
  */
 
-import type { CurrentUser } from '@features/authentication/models/auth.types';
-import type { PermissionAction } from '@core/rbac/types';
 import type { Permission } from '@core/rbac/types';
+
+import type { CurrentUser } from '@features/authentication/models/auth.types';
 
 const KEY = 'session_snapshot_v1';
 
@@ -23,9 +23,6 @@ interface Snapshot {
   user?: CurrentUser | null;
   menuKeys?: string[];
   permissions?: Permission[];
-  /** API-scope permission codes, cached for the same reason as menu keys. */
-  apiCodes?: string[];
-  apiResourceActions?: Record<string, PermissionAction[]>;
 }
 
 function read(): Snapshot {
@@ -48,18 +45,11 @@ export const sessionCache = {
   getUser: (): CurrentUser | null => read().user ?? null,
   getMenuKeys: (): string[] => read().menuKeys ?? [],
   getPermissions: (): Permission[] => read().permissions ?? [],
-  getApiCodes: (): string[] => read().apiCodes ?? [],
-  getApiResourceActions: (): Record<string, PermissionAction[]> =>
-    read().apiResourceActions ?? {},
   hasUser: (): boolean => !!read().user,
 
   setUser: (user: CurrentUser | null): void => write({ user }),
   setRbac: (menuKeys: string[], permissions: Permission[]): void =>
     write({ menuKeys, permissions }),
-  setApiRbac: (
-    apiCodes: string[],
-    apiResourceActions: Record<string, PermissionAction[]>
-  ): void => write({ apiCodes, apiResourceActions }),
 
   clear: (): void => {
     try {

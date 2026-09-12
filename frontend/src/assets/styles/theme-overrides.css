@@ -55,7 +55,11 @@
 
 /* ─── Global Compact Density ─── */
 
-html, body, #root {
+/* Bind the document to the viewport so only the main content area scrolls
+   (prevents the whole page — including the sidebar/topbar — from scrolling). */
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   overflow: hidden;
@@ -118,17 +122,32 @@ h2 {
   color: var(--color-text-primary);
 }
 
-.p-button.p-button-text {
-  color: var(--color-primary);
+/* Text & link buttons must reset the global .p-button red background,
+   otherwise they render as solid red blocks with an invisible icon/label. */
+.p-button.p-button-text,
+.p-button.p-button-link {
   background: transparent;
   border-color: transparent;
+  color: var(--color-primary);
 }
 
-.p-button.p-button-text:not(:disabled):hover {
+.p-button.p-button-text:not(:disabled):hover,
+.p-button.p-button-link:not(:disabled):hover {
   background: var(--color-primary-50);
   border-color: transparent;
   color: var(--color-primary-hover);
 }
+
+/* Keep severity coloring on text buttons (icon color reflects intent) */
+.p-button.p-button-text.p-button-secondary { color: var(--color-text-secondary); }
+.p-button.p-button-text.p-button-success { color: var(--color-success); }
+.p-button.p-button-text.p-button-info { color: var(--color-info); }
+.p-button.p-button-text.p-button-warning { color: var(--color-warning); }
+.p-button.p-button-text.p-button-danger { color: var(--color-error); }
+
+.p-button.p-button-text.p-button-danger:not(:disabled):hover { background: #FEF2F2; }
+.p-button.p-button-text.p-button-success:not(:disabled):hover { background: #ECFDF5; }
+.p-button.p-button-text.p-button-info:not(:disabled):hover { background: #EFF6FF; }
 
 /* Input fields — compact */
 .p-inputtext {
