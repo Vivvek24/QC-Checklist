@@ -16,6 +16,7 @@ import {
 } from '@features/workflow-admin';
 import { BusinessUnitPage, UnitPage, FormatPage, StagePage, QuestionPage, ProductPage, ValidationTypePage, RemarkPage, SapFieldPage, ApprovalLabelPage, FormatStagesPage, FormatsViewPage, StageQuestionViewPage, ProductTestsPage } from '@features/masters';
 import { CreateRequestPage } from '@features/qc-checklist';
+import { TemplateConfigPage } from '@features/template-studio';
 import { DashboardPage } from '@features/dashboard';
 import { MainLayout } from '@app/layouts/MainLayout';
 import { PrivateRoute } from './PrivateRoute';
@@ -54,6 +55,22 @@ export const AppRouter = () => {
               element={
                 <PrivateRoute menuKey="qc_checklist">
                   <CreateRequestPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="template-config"
+              element={
+                <PrivateRoute>
+                  <TemplateConfigPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="template-config/:formatId"
+              element={
+                <PrivateRoute>
+                  <TemplateConfigPage />
                 </PrivateRoute>
               }
             />

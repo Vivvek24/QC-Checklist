@@ -54,6 +54,10 @@ export const FormatsViewPage = () => {
             <span className="cursor-pointer font-medium" style={{ color: 'var(--color-primary)', fontSize: '0.8rem' }}
               onClick={() => navigate(`/masters/formats-view/${row.id}/questions`)}>View All Questions</span>
           )} />
+          <Column header="Template Config" body={(row: Format) => (
+            <span className="cursor-pointer font-medium" style={{ color: 'var(--color-primary)', fontSize: '0.8rem' }}
+              onClick={() => navigate(`/template-config/${row.id}`)}>Configure Template</span>
+          )} />
         </DataTable>
       </div>
     </div>

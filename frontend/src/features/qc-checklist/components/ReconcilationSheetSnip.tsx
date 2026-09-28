@@ -17,8 +17,9 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
 import { Calendar } from 'primereact/calendar';
-import { OptionSelector } from './OptionSelector';
 import { apiClient } from '@shared/services/apiClient';
+import { BASIC_DETAILS_STAGE } from '../../masters/constants';
+import { OptionSelector } from './OptionSelector';
 
 interface QuestionAnswerPreview {
   stage_question_mapping_id: number;
@@ -74,7 +75,7 @@ export interface ReconcilationSheetSnipHandle {
 
 export const ReconcilationSheetSnip = forwardRef<ReconcilationSheetSnipHandle, Props>(
   ({ questions, sections, stageName, stageStatus, hasSection }, ref) => {
-    const isBasicDetails = stageName === 'Basic Details';
+    const isBasicDetails = stageName === BASIC_DETAILS_STAGE;
     const canEdit = stageStatus === 'Initial' || stageStatus === 'Draft' || stageStatus === 'ReferBack' || stageStatus === 'Saved';
 
     const [selections, setSelections] = useState<Record<number, any>>({});

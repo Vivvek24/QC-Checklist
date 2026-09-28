@@ -567,7 +567,10 @@ h2 {
 .em-topbar {
   background: var(--color-surface);
   border-bottom: none;
-  box-shadow: none;
+  /* Match the sidebar's right-edge shadow, offset downward. */
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.092);
+  position: relative;
+  z-index: 1;
 }
 
 /* Cards */
@@ -939,4 +942,404 @@ h2 {
   background: var(--color-primary-50);
   border: 1px solid var(--color-primary-100);
   border-radius: 4px;
+}
+
+
+/* ─── Template Studio — design canvas (ConfigTable, StageConfig, SectionConfig) ───
+   Keeps the column header controls compact and readable instead of a wall of
+   inline styles. */
+
+/* Table shell */
+.snip-table-wrap {
+  overflow-x: auto;
+}
+
+.snip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  table-layout: fixed;
+}
+
+.snip-table thead tr {
+  background: #f1f5f9;
+}
+
+.snip-table td,
+.snip-table th {
+  border: 1px solid #e6ebf1;
+}
+
+/* Column header cell */
+.snip-col-header {
+  padding: 0.5rem 0.55rem;
+  width: 10rem; /* fallback when the column has no explicit width yet */
+  min-width: 3rem;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.snip-col-header-top {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.snip-col-header-input {
+  border: none !important;
+  background: transparent !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 0.7rem !important;
+  color: #334155;
+  padding: 0.15rem 0.25rem !important;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Remove-column button: small, quiet, only stands out on hover */
+.snip-col-remove-btn {
+  width: 1rem !important;
+  height: 1rem !important;
+  flex-shrink: 0;
+  color: #b0b8c4 !important;
+}
+
+.snip-col-remove-btn .p-button-icon {
+  font-size: 0.55rem;
+}
+
+.snip-col-remove-btn:hover {
+  color: var(--color-error, #ef4444) !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+/* Column type dropdown — smaller, sits right under the header text */
+.snip-col-type-dropdown {
+  margin-top: 0.3rem;
+  font-size: 0.68rem;
+}
+
+.snip-col-type-dropdown .p-dropdown-label {
+  padding: 0.25rem 0.4rem;
+  font-size: 0.68rem;
+}
+
+/* Reorder + width row under the type dropdown */
+.snip-col-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.3rem;
+}
+
+.snip-col-move-btn {
+  width: 1.1rem !important;
+  height: 1.1rem !important;
+  color: #b0b8c4 !important;
+}
+
+.snip-col-move-btn:not(:disabled):hover {
+  color: #475569 !important;
+  background: rgba(71, 85, 105, 0.08) !important;
+}
+
+.snip-col-move-btn .p-button-icon {
+  font-size: 0.6rem;
+}
+
+.snip-col-width-input {
+  width: 3.8rem;
+  height: 1.25rem !important;
+  font-size: 0.62rem !important;
+  padding: 0 0.2rem !important;
+  text-align: center;
+  text-transform: none;
+  margin-left: 0.15rem;
+}
+
+.snip-col-width-input::placeholder {
+  text-align: center;
+  color: #c3cad3;
+}
+
+/* Add-column cell */
+.snip-add-col-cell {
+  width: 2.5rem;
+  background: #fbfcfe;
+  padding: 0 !important;
+}
+
+.snip-add-col-cell-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 3.5rem;
+}
+
+/* Body cells */
+.snip-cell {
+  padding: 0.45rem 0.5rem;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.snip-row-actions-cell {
+  background: #fbfcfe;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.snip-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+}
+
+.snip-row-action-btn {
+  width: 1.4rem !important;
+  height: 1.4rem !important;
+  color: #94a3b8 !important;
+}
+
+.snip-row-action-btn:hover {
+  color: #475569 !important;
+}
+
+.snip-row-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem;
+  cursor: grab;
+  color: #b0b8c4;
+}
+
+.snip-row-drag-handle:hover {
+  color: #64748b;
+}
+
+.snip-row-declaration-tag {
+  font-size: 0.55rem;
+  padding: 0.05rem 0.3rem;
+}
+
+.snip-row-drag-over {
+  background: #fff7f7;
+  box-shadow: inset 0 2px 0 0 var(--color-primary, #ED1C24);
+}
+
+/* Empty states */
+.snip-empty-state {
+  padding: 1rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+/* Section block */
+.snip-section-block {
+  border: 1px solid #e6ebf1;
+  background: #fcfdfe;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.snip-section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.snip-section-header-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.snip-section-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.15rem 0.4rem;
+  cursor: grab;
+  color: #b0b8c4;
+}
+
+.snip-section-drag-handle:hover {
+  color: #64748b;
+}
+
+.snip-section-name-field {
+  flex: 1;
+  min-width: 0;
+  max-width: 24rem;
+}
+
+/* Stage block */
+.snip-stage-block {
+  border: 1px solid #e2e8f0;
+}
+
+.snip-stage-header {
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.snip-stage-name-field {
+  flex: 1;
+  min-width: 0;
+  max-width: 24rem;
+}
+
+.snip-stage-sections-wrap {
+  border-top: 1px dashed #e2e8f0;
+}
+
+.snip-section-drop-target {
+  border-radius: 6px;
+}
+
+.snip-section-drop-target--over {
+  outline: 2px solid var(--color-primary, #ED1C24);
+  outline-offset: 2px;
+}
+
+/* Add Row / Add Section / Add Stage — the canvas's primary "add" actions.
+   No text label on any of them, so recognisability comes from a consistent
+   tiered language instead of a caption: size, color and icon all scale up
+   with the scope of what gets added — row (smallest, green outline, list
+   icon) < section (mid-size, blue fill, folder-plus icon) < stage (largest,
+   primary red fill, sitemap icon — the top-level structural unit). Distinct
+   colors per level so they're never confused with each other at a glance. */
+.snip-add-btn.p-button {
+  transition: transform 0.12s, background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.snip-add-btn.p-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* Row — smallest, quietest: filled green, sits right under the table it adds to. */
+.snip-add-btn--row.p-button {
+  width: 1.9rem !important;
+  height: 1.9rem !important;
+  background-color: var(--color-success, #17c765) !important;
+  color: #fff !important;
+  border: 1px solid var(--color-success, #17c765) !important;
+  box-shadow: 0 1px 2px rgba(23, 199, 101, 0.25) !important;
+}
+
+.snip-add-btn--row.p-button:hover:not(:disabled) {
+  background-color: var(--color-success-hover, #0da050) !important;
+  border-color: var(--color-success-hover, #0da050) !important;
+}
+
+.snip-add-btn--row.p-button .p-button-icon {
+  font-size: 0.85rem;
+}
+
+/* Section — mid emphasis: filled, a folder+ to read as "group of rows". */
+.snip-add-btn--section.p-button {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  background-color: var(--color-info, #3b82f6) !important;
+  color: #fff !important;
+  border: 1px solid var(--color-info, #3b82f6) !important;
+  box-shadow: 0 1px 2px rgba(59, 130, 246, 0.25) !important;
+}
+
+.snip-add-btn--section.p-button:hover:not(:disabled) {
+  background-color: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.snip-add-btn--section.p-button .p-button-icon {
+  font-size: 1.05rem;
+}
+
+/* Stage — largest, most prominent: the top-level structural action. */
+.snip-add-btn--stage.p-button {
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  background-color: var(--color-primary, #ED1C24) !important;
+  color: #fff !important;
+  border: 1px solid var(--color-primary, #ED1C24) !important;
+  box-shadow: 0 2px 4px rgba(237, 28, 36, 0.25) !important;
+}
+
+.snip-add-btn--stage.p-button:hover:not(:disabled) {
+  background-color: var(--color-primary-hover, #C8141B) !important;
+  border-color: var(--color-primary-hover, #C8141B) !important;
+}
+
+.snip-add-btn--stage.p-button .p-button-icon {
+  font-size: 1.3rem;
+}
+
+/* Vertical rhythm between stacked stage blocks on the canvas */
+.snip-canvas-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Page shell — fluid at every width so it always fills whatever space the
+   layout gives it (e.g. more room appears the instant the sidebar is
+   collapsed), capped only so lines don't get unreadably long on very wide
+   monitors. */
+.snip-page {
+  height: calc(100vh - 48px);
+  overflow-y: auto;
+  width: 100%;
+}
+
+.snip-page-canvas {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Template Studio responsive breakpoints */
+
+/* Tablet and below: headers stack instead of sitting side by side. The
+   canvas itself is already fluid at every width (see .snip-page-canvas). */
+@media (max-width: 900px) {
+  .snip-stage-header,
+  .snip-section-header {
+    flex-wrap: wrap;
+  }
+
+  .snip-stage-name-field,
+  .snip-section-name-field {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* Phones: column header controls stack, the width input grows a little for
+   easier tapping, and per-column min-width shrinks so more fits before the
+   table needs to scroll. */
+@media (max-width: 600px) {
+  .snip-table {
+    font-size: 0.72rem;
+  }
+
+  .snip-col-header {
+    min-width: 8rem;
+  }
+
+  .snip-col-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .snip-col-width-input {
+    width: 3.2rem;
+  }
 }

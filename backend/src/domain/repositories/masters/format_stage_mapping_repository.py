@@ -14,6 +14,13 @@ class IFormatStageMappingRepository(IRepository[FormatStageMapping]):
         ...
 
     @abstractmethod
+    async def get_by_format_and_stage(
+        self, format_id: int, stage_id: int
+    ) -> FormatStageMapping | None:
+        """Load the mapping between a format and a stage, or None if it doesn't exist yet."""
+        ...
+
+    @abstractmethod
     async def list_by_format(self, format_id: int) -> list[FormatStageMapping]:
         """Return all mappings for a specific format."""
         ...

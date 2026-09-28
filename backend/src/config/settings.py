@@ -135,6 +135,10 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": True,
+        # Ignore keys present in .env that this version of Settings does not
+        # declare (e.g. optional integrations), so a richer .env doesn't block
+        # startup.
+        "extra": "ignore",
     }
 
 

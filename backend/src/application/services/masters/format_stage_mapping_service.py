@@ -29,6 +29,27 @@ class FormatStageMappingService:
         items = await self._repo.list_by_format(format_id)
         return [self._to_dto(i) for i in items]
 
+    async def get_or_create_for_format_and_stage(
+        self, format_id: int, stage_id: int, actor: User
+    ) -> FormatStageMappingDTO:
+        """Return the format-stage mapping, creating it if it doesn't exist yet.
+
+        Used by Template Studio's stage picker: the dropdown lists every stage
+        from the Stage master (not just already-mapped ones), so picking a
+        stage that has no mapping yet must create one on save instead of
+        failing.
+        """
+        existing = await self._repo.get_by_format_and_stage(format_id, stage_id)
+        if existing is not None:
+            return self._to_dto(existing)
+        created = await self._repo.create(FormatStageMapping(
+            format_id=format_id,
+            stage_id=stage_id,
+            created_by=actor.username,
+            modified_by=actor.username,
+        ))
+        return self._to_dto(created)
+
     async def list_by_stage(self, stage_id: int) -> list[FormatStageMappingDTO]:
         items = await self._repo.list_by_stage(stage_id)
         return [self._to_dto(i) for i in items]

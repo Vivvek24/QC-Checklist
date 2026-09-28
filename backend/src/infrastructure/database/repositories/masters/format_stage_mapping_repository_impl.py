@@ -56,6 +56,17 @@ class FormatStageMappingRepositoryImpl(SqlAlchemyRepository[FormatStageMapping, 
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
+    async def get_by_format_and_stage(
+        self, format_id: int, stage_id: int
+    ) -> FormatStageMapping | None:
+        stmt = select(FormatStageMappingModel).where(
+            FormatStageMappingModel.format_id == format_id,
+            FormatStageMappingModel.stage_id == stage_id,
+        )
+        result = await self._session.execute(stmt)
+        model = result.scalar_one_or_none()
+        return self._to_entity(model) if model else None
+
     async def create(self, entity: FormatStageMapping) -> FormatStageMapping:
         model = FormatStageMappingModel(
             format_id=entity.format_id,

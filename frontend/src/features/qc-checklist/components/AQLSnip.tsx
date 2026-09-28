@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { InputText } from 'primereact/inputtext';
+import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 import { OptionSelector } from './OptionSelector';
 
 interface QuestionAnswerPreview {
@@ -41,7 +42,7 @@ interface Props {
 }
 
 export const AQLSnip = ({ questions, sections, stageName, stageStatus, hasSection }: Props) => {
-  const isBasicDetails = stageName === 'Basic Details';
+  const isBasicDetails = stageName === BASIC_DETAILS_STAGE;
   const canAdd = stageStatus === 'Initial' || stageStatus === 'Draft' || stageStatus === 'ReferBack';
 
   const [answers, setAnswers] = useState<Record<number, string>>({});

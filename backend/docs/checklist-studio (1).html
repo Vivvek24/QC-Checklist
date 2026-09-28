@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checklist Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1B2A33;
+  --paper:#F3F5F3;
+  --panel:#FFFFFF;
+  --line:#DCE2E1;
+  --line-strong:#B9C3C2;
+  --steel:#3E6B85;
+  --steel-dark:#2A4A5C;
+  --steel-tint:#E8EFF2;
+  --pass:#3F7859;
+  --pass-tint:#E7F1EA;
+  --fail:#B23B32;
+  --fail-tint:#FBEAE8;
+  --warn:#A6741F;
+  --warn-tint:#F7EFDE;
+  --muted:#6E7C7F;
+  --radius:3px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'IBM Plex Sans',sans-serif;
+  font-size:14px;
+  line-height:1.45;
+}
+.mono{font-family:'IBM Plex Mono',monospace;}
+::selection{background:var(--steel);color:#fff;}
+
+/* ---- App shell ---- */
+#app{display:flex;flex-direction:column;min-height:100vh;}
+
+.topbar{
+  background:var(--ink);
+  color:#EDEFEE;
+  padding:0 20px;
+  display:flex;
+  align-items:center;
+  gap:24px;
+  height:56px;
+  flex-shrink:0;
+  border-bottom:3px solid var(--steel);
+}
+.brand{display:flex;align-items:baseline;gap:8px;}
+.brand .mark{
+  font-family:'Space Grotesk',sans-serif;
+  font-weight:700;
+  font-size:16px;
+  letter-spacing:0.02em;
+}
+.brand .mark span{color:#8FB9CE;}
+.brand .sub{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:10px;
+  color:#8A9A9E;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+}
+.tabs{display:flex;gap:2px;margin-left:12px;}
+.tab-btn{
+  background:transparent;border:none;color:#B7C2C4;
+  font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;font-weight:500;
+  letter-spacing:0.03em;text-transform:uppercase;
+  padding:8px 14px;cursor:pointer;border-radius:2px;
+  transition:background .15s,color .15s;
+}
+.tab-btn:hover{color:#fff;background:rgba(255,255,255,0.06);}
+.tab-btn.active{color:#fff;background:var(--steel-dark);}
+.topbar .fill-hint{margin-left:auto;font-size:11px;color:#8A9A9E;font-family:'IBM Plex Mono',monospace;}
+
+.layout{display:flex;flex:1;min-height:0;}
+.rail{
+  width:260px;flex-shrink:0;background:var(--panel);
+  border-right:1px solid var(--line);
+  padding:16px;overflow-y:auto;
+}
+.rail h3{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:0.09em;
+  text-transform:uppercase;color:var(--muted);margin:0 0 10px 0;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.canvas-wrap{flex:1;overflow-y:auto;padding:28px 32px 80px;}
+.canvas{max-width:840px;margin:0 auto;position:relative;}
+
+/* ---- Buttons / inputs ---- */
+button{font-family:inherit;}
+.btn{
+  border:1px solid var(--line-strong);background:var(--panel);color:var(--ink);
+  padding:7px 13px;border-radius:var(--radius);font-size:12.5px;font-weight:500;
+  cursor:pointer;transition:all .12s;
+}
+.btn:hover{border-color:var(--steel);color:var(--steel-dark);}
+.btn-primary{background:var(--steel);border-color:var(--steel);color:#fff;}
+.btn-primary:hover{background:var(--steel-dark);border-color:var(--steel-dark);color:#fff;}
+.btn-danger{color:var(--fail);}
+.btn-danger:hover{border-color:var(--fail);color:var(--fail);}
+.btn-ghost{border-color:transparent;background:transparent;padding:4px 8px;}
+.btn-ghost:hover{background:var(--steel-tint);}
+.btn-sm{padding:4px 9px;font-size:11.5px;}
+.btn-block{width:100%;}
+.icon-btn{
+  width:24px;height:24px;border:none;background:transparent;color:var(--muted);
+  cursor:pointer;border-radius:2px;font-size:14px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;
+}
+.icon-btn:hover{background:var(--steel-tint);color:var(--steel-dark);}
+
+input[type=text],input[type=number],input[type=date],select,textarea{
+  font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--ink);
+  border:1px solid var(--line-strong);border-radius:var(--radius);
+  padding:6px 8px;background:#fff;width:100%;
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--steel);outline-offset:1px;border-color:var(--steel);}
+textarea{resize:vertical;font-family:inherit;}
+label.field-label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em;}
+
+/* ---- Rail lists ---- */
+.rail-item{
+  padding:9px 10px;border-radius:var(--radius);cursor:pointer;
+  border:1px solid transparent;margin-bottom:4px;font-size:13px;
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+}
+.rail-item:hover{background:var(--steel-tint);}
+.rail-item.active{background:var(--steel-tint);border-color:var(--steel);color:var(--steel-dark);font-weight:600;}
+.rail-item .rname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.rail-empty{font-size:12px;color:var(--muted);padding:14px 4px;font-style:italic;}
+
+/* ---- Document card (the "paper" form) ---- */
+.doc{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-top:4px solid var(--ink);
+  box-shadow:0 1px 3px rgba(20,30,35,0.06);
+  padding:28px 32px;
+  position:relative;
+}
+.doc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--line);}
+.doc-head .titles input{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;border:none;padding:2px 0;width:420px;}
+.doc-head .titles input:focus{outline:none;border-bottom:1px solid var(--steel);}
+.doc-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-align:right;line-height:1.6;}
+.doc-code input{font-family:'IBM Plex Mono',monospace;font-size:11px;text-align:right;border:none;padding:1px 0;width:150px;color:var(--muted);}
+.doc-code input:focus{outline:none;border-bottom:1px dotted var(--steel);}
+
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px;margin-bottom:22px;}
+.meta-cell{display:flex;flex-direction:column;gap:2px;position:relative;}
+.meta-cell .row-actions{position:absolute;top:-2px;right:-2px;}
+
+.section{margin-bottom:26px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.section-head .stitle{
+  font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.section-head .stitle .num{color:var(--steel);font-family:'IBM Plex Mono',monospace;font-size:12px;}
+.section-head input.stitle-input{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;border:none;padding:1px 2px;background:transparent;}
+.section-head input.stitle-input:focus{outline:none;background:var(--steel-tint);}
+.section-actions{display:flex;gap:2px;align-items:center;}
+.section-type-badge{
+  font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;
+  letter-spacing:0.06em;color:var(--muted);background:var(--paper);border:1px solid var(--line);
+  padding:2px 6px;border-radius:2px;
+}
+
+table.qtable{width:100%;border-collapse:collapse;font-size:12.5px;}
+table.qtable th{
+  text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;
+  color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line-strong);
+  background:var(--paper);
+}
+table.qtable td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top;}
+table.qtable tr:last-child td{border-bottom:1px solid var(--line-strong);}
+.row-sr{color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11.5px;width:28px;}
+.row-qtext-input{border:none;padding:3px 2px;background:transparent;width:100%;}
+.row-qtext-input:focus{outline:none;background:var(--steel-tint);}
+.row-del{width:26px;text-align:center;}
+
+.yn-group{display:flex;gap:10px;}
+.yn-opt{display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;user-select:none;}
+.yn-opt input{width:auto;accent-color:var(--steel);cursor:pointer;}
+.yn-opt.sel-yes.chosen{color:var(--pass);font-weight:600;}
+.yn-opt.sel-no.chosen{color:var(--fail);font-weight:600;}
+.yn-opt.sel-na.chosen{color:var(--muted);font-weight:600;}
+
+.aql-inputs{display:flex;gap:6px;align-items:center;}
+.aql-inputs input{width:64px;text-align:right;}
+.aql-flag{font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 6px;border-radius:2px;white-space:nowrap;}
+.aql-flag.ok{background:var(--pass-tint);color:var(--pass);}
+.aql-flag.bad{background:var(--fail-tint);color:var(--fail);}
+.aql-flag.pending{background:var(--paper);color:var(--muted);}
+
+.note-block{background:var(--steel-tint);border-left:3px solid var(--steel);padding:9px 12px;font-size:12.5px;color:var(--steel-dark);border-radius:0 2px 2px 0;}
+.note-block textarea{background:transparent;border:none;color:var(--steel-dark);}
+.note-block textarea:focus{outline:none;}
+
+.dt-wrap{overflow-x:auto;}
+.add-row-btn{margin-top:8px;}
+
+.build-row-tools{display:flex;gap:4px;padding-top:8px;flex-wrap:wrap;}
+
+.footer-block{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);display:flex;gap:28px;}
+.sig-line{flex:1;}
+.sig-line .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:18px;}
+.sig-line .line{border-top:1px solid var(--ink);padding-top:4px;font-size:12px;color:var(--muted);}
+
+/* stamp */
+.stamp{
+  position:absolute; top:26px; right:32px;
+  font-family:'Space Grotesk',sans-serif; font-weight:700;
+  font-size:15px; letter-spacing:0.12em; text-transform:uppercase;
+  padding:7px 16px; border:2.5px solid; border-radius:4px;
+  transform:rotate(-6deg); opacity:0.9; pointer-events:none;
+}
+.stamp.pending{color:var(--muted);border-color:var(--muted);}
+.stamp.pass{color:var(--pass);border-color:var(--pass);}
+.stamp.fail{color:var(--fail);border-color:var(--fail);}
+
+/* empty state */
+.empty-state{
+  text-align:center;padding:70px 20px;color:var(--muted);
+}
+.empty-state .big{font-family:'Space Grotesk',sans-serif;font-size:18px;color:var(--ink);margin-bottom:6px;font-weight:600;}
+.empty-state .small{font-size:13px;max-width:400px;margin:0 auto 18px;}
+
+/* records */
+.rec-card{
+  background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--muted);
+  padding:12px 16px;margin-bottom:10px;border-radius:0 3px 3px 0;
+  display:flex;justify-content:space-between;align-items:center;gap:16px;cursor:pointer;
+}
+.rec-card:hover{border-color:var(--steel);}
+.rec-card.pass{border-left-color:var(--pass);}
+.rec-card.fail{border-left-color:var(--fail);}
+.rec-title{font-weight:600;font-size:13.5px;}
+.rec-meta{font-size:11.5px;color:var(--muted);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+.rec-badge{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;padding:3px 9px;border-radius:2px;}
+.rec-badge.pass{background:var(--pass-tint);color:var(--pass);}
+.rec-badge.fail{background:var(--fail-tint);color:var(--fail);}
+
+/* toast */
+#toast{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;padding:9px 18px;border-radius:3px;font-size:12.5px;
+  opacity:0;transition:all .2s;pointer-events:none;z-index:999;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* library grid */
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;}
+.lib-card{background:var(--panel);border:1px solid var(--line);padding:16px;border-radius:3px;cursor:pointer;transition:border-color .12s;}
+.lib-card:hover{border-color:var(--steel);}
+.lib-card .lc-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;margin-bottom:4px;}
+.lib-card .lc-code{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);margin-bottom:10px;}
+.lib-card .lc-stats{font-size:11.5px;color:var(--muted);display:flex;gap:10px;}
+.lib-card .lc-actions{margin-top:12px;display:flex;gap:6px;}
+
+@media print{
+  .topbar,.rail,.build-row-tools,.section-actions,.icon-btn,.row-del{display:none !important;}
+  .canvas-wrap{padding:0;}
+  .doc{border:none;box-shadow:none;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">Checklist<span>Studio</span></div>
+      <div class="sub">QC/QA form configurator — POC</div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn" data-tab="library">Library</button>
+      <button class="tab-btn" data-tab="design">Design</button>
+      <button class="tab-btn" data-tab="fill">Fill &amp; Run</button>
+      <button class="tab-btn" data-tab="records">Records</button>
+    </div>
+    <div class="fill-hint" id="topHint"></div>
+  </div>
+  <div class="layout">
+    <div class="rail" id="rail"></div>
+    <div class="canvas-wrap"><div class="canvas" id="canvas"></div></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   CHECKLIST STUDIO — POC
+   A configurable engine for GxP-style checklist / review /
+   AQL / reconciliation forms, modeled on real SOP layouts:
+   - header metadata block
+   - Yes/No/N-A question tables
+   - AQL defect tables (limit vs observed)
+   - dynamic data tables (sample distribution style)
+   - sign-off footer
+   Data persists via window.storage (personal scope).
+========================================================= */
+
+const uid = () => Math.random().toString(36).slice(2,9);
+let TAB = 'library';
+let templates = [];      // {id,name,docNo,rev,dept,headerFields:[],sections:[]}
+let instances = [];      // filled records
+let activeTemplateId = null;
+let activeInstanceDraft = null; // instance being filled (unsaved or editing)
+let activeRecordId = null;
+
+/* ---------------- storage ---------------- */
+async function loadAll(){
+  try{
+    const t = await window.storage.get('templates-index', false);
+    templates = t ? JSON.parse(t.value) : [];
+  }catch(e){ templates = []; }
+  try{
+    const r = await window.storage.get('instances-index', false);
+    instances = r ? JSON.parse(r.value) : [];
+  }catch(e){ instances = []; }
+  if(templates.length===0){
+    seedTemplates();
+    await saveTemplates();
+  }
+}
+async function saveTemplates(){
+  try{ await window.storage.set('templates-index', JSON.stringify(templates), false); }
+  catch(e){ toast('Could not save templates'); }
+}
+async function saveInstances(){
+  try{ await window.storage.set('instances-index', JSON.stringify(instances), false); }
+  catch(e){ toast('Could not save record'); }
+}
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>el.classList.remove('show'), 2200);
+}
+
+/* ---------------- seed templates, based on the uploaded SOP forms ---------------- */
+function seedTemplates(){
+  templates.push({
+    id: uid(), name:'Review of Chromatographic Data', docNo:'SOP/QAD/021/F01-08', rev:'08', dept:'QAD',
+    headerFields:[
+      {id:uid(),label:'Product / Material Name',type:'text'},
+      {id:uid(),label:'Batch No. / A.R. No.',type:'text'},
+      {id:uid(),label:'Test Name',type:'text'},
+      {id:uid(),label:'Instrument ID',type:'text'},
+      {id:uid(),label:'Instrument Name (HPLC/UPLC/GC/IC)',type:'text'},
+      {id:uid(),label:'Sequence Name',type:'text'},
+    ],
+    sections:[
+      {id:uid(),type:'checklist',title:'Pre-Run Verification',rows:[
+        {id:uid(),kind:'yesno',text:'System flushing / pre-column washing or conditioning done as per SOP/MOA?'},
+        {id:uid(),kind:'yesno',text:'Method parameters selected/set as per MOA (wavelength, flow rate, gradient, temperature)?'},
+        {id:uid(),kind:'yesno',text:'Sample set verification and no. of injections as per MOA?'},
+        {id:uid(),kind:'yesno',text:'Are septa/crimped vials properly sealed?'},
+        {id:uid(),kind:'yesno',text:'Are all analytical, standard and SST solutions appropriately prepared as per method?'},
+      ]},
+      {id:uid(),type:'checklist',title:'Post-Run Verification',rows:[
+        {id:uid(),kind:'yesno',text:'System suitability criteria met as per MOA?'},
+        {id:uid(),kind:'yesno',text:'Integration performed as per SOP with no manual manipulation?'},
+        {id:uid(),kind:'yesno',text:'Audit trail reviewed for the sequence, with no unexplained events?'},
+      ]},
+    ]
+  });
+  templates.push({
+    id: uid(), name:'Review of Non-Chromatographic Data', docNo:'SOP/QAD/021/F02-08', rev:'08', dept:'QAD',
+    headerFields:[
+      {id:uid(),label:'Product / Material Name',type:'text'},
+      {id:uid(),label:'Batch No. / Lot No. / A.R. No.',type:'text'},
+      {id:uid(),label:'Test Name',type:'text'},
+      {id:uid(),label:'Instrument ID',type:'text'},
+      {id:uid(),label:'Instrument Name (FTIR/UV-VIS/Auto-titrator/KF...)',type:'text'},
+    ],
+    sections:[
+      {id:uid(),type:'checklist',title:'Pre Run / Analysis Verification',rows:[
+        {id:uid(),kind:'yesno',text:'System cleaning as per SOP/MOA? (if applicable)'},
+        {id:uid(),kind:'yesno',text:'Method parameter selected/set as per MOA? (if applicable)'},
+        {id:uid(),kind:'yesno',text:'Sample information verification and no. of runs as per MOA?'},
+        {id:uid(),kind:'yesno',text:'File name / data path selection done as per MOA?'},
+        {id:uid(),kind:'yesno',text:'Is % relative humidity of the area < 50% RH (if Karl Fischer titration)?'},
+        {id:uid(),kind:'yesno',text:'Electrode selected/set as per MOA? (if applicable)'},
+      ]},
+    ]
+  });
+  templates.push({
+    id: uid(), name:'AQL Checklist of Leaflet', docNo:'SOP/QCD/086/F07-02', rev:'02', dept:'QCD',
+    headerFields:[
+      {id:uid(),label:'Name of Material',type:'text'},
+      {id:uid(),label:'Vendor Name',type:'text'},
+      {id:uid(),label:'A.R. No.',type:'text'},
+      {id:uid(),label:'Vendor Batch No.',type:'text'},
+      {id:uid(),label:'Received Qty.',type:'number'},
+      {id:uid(),label:'Sample Qty.',type:'number'},
+    ],
+    sections:[
+      {id:uid(),type:'checklist',title:'Critical Defects',rows:[
+        {id:uid(),kind:'aql',text:'Mixing of different leaflet',limit:0},
+        {id:uid(),kind:'aql',text:'Text: missing / incorrect / incomplete',limit:0},
+      ]},
+      {id:uid(),type:'checklist',title:'Major Defects',rows:[
+        {id:uid(),kind:'aql',text:'Prominent mottling',limit:1.0},
+        {id:uid(),kind:'aql',text:'Colour shade variation (coloured leaflet)',limit:4.0},
+      ]},
+      {id:uid(),type:'checklist',title:'Minor Defects',rows:[
+        {id:uid(),kind:'aql',text:'Slight smudged text',limit:4.0},
+        {id:uid(),kind:'aql',text:'Improper fold',limit:4.0},
+      ]},
+    ]
+  });
+  templates.push({
+    id: uid(), name:'Sample Distribution and Reconciliation', docNo:'SOP/QCD/064/F01-01', rev:'01', dept:'QCD',
+    headerFields:[
+      {id:uid(),label:'Product Name',type:'text'},
+      {id:uid(),label:'Stage',type:'text'},
+      {id:uid(),label:'Batch No.',type:'text'},
+      {id:uid(),label:'AR No. / Sample ID',type:'text'},
+      {id:uid(),label:'Sample Quantity Received',type:'number'},
+      {id:uid(),label:'Storage Condition',type:'text'},
+    ],
+    sections:[
+      {id:uid(),type:'table',title:'Sample Distribution Log',
+        columns:[{id:uid(),label:'Test'},{id:uid(),label:'No. of Sample Issued'},{id:uid(),label:'Issued By / Date'},{id:uid(),label:'Received By / Date'}]
+      },
+      {id:uid(),type:'note',title:'Remarks',text:''},
+    ]
+  });
+}
+
+/* ---------------- helpers ---------------- */
+function findTemplate(id){ return templates.find(t=>t.id===id); }
+function newTemplate(){
+  return {id:uid(), name:'Untitled Checklist', docNo:'SOP/___/___/F__-__', rev:'01', dept:'QA',
+    headerFields:[{id:uid(),label:'Product / Material Name',type:'text'},{id:uid(),label:'Batch No. / A.R. No.',type:'text'}],
+    sections:[{id:uid(),type:'checklist',title:'Verification',rows:[{id:uid(),kind:'yesno',text:'New question'}]}]};
+}
+function blankInstance(tpl){
+  return {id:uid(), templateId:tpl.id, templateName:tpl.name, docNo:tpl.docNo, createdAt:new Date().toISOString(),
+    header:{}, answers:{}, tableRows:{}, filledBy:''};
+}
+function computeStatus(tpl, inst){
+  let anyAnswer=false, fail=false;
+  (tpl.sections||[]).forEach(sec=>{
+    if(sec.type==='checklist'){
+      (sec.rows||[]).forEach(row=>{
+        const a = inst.answers[row.id];
+        if(row.kind==='yesno'){
+          if(a){anyAnswer=true; if(a==='No') fail=true;}
+        } else if(row.kind==='aql'){
+          const obs = a && a.observed!==undefined && a.observed!=='' ? parseFloat(a.observed) : null;
+          if(obs!==null){ anyAnswer=true; if(obs>row.limit) fail=true; }
+        } else if(row.kind==='numeric' || row.kind==='text'){
+          if(a){anyAnswer=true;}
+        }
+      });
+    }
+  });
+  if(!anyAnswer) return 'pending';
+  return fail ? 'fail' : 'pass';
+}
+
+/* ---------------- render root ---------------- */
+function render(){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===TAB));
+  const hint = document.getElementById('topHint');
+  hint.textContent = TAB==='fill' ? 'Answers autosave to Records on Save' : (TAB==='design' ? 'Changes save to your Library' : '');
+  renderRail();
+  renderCanvas();
+}
+function setTab(t){ TAB=t; render(); }
+
+/* ---------------- rail ---------------- */
+function renderRail(){
+  const rail = document.getElementById('rail');
+  if(TAB==='library'){
+    rail.innerHTML = `<h3>Templates <button class="icon-btn" onclick="createTemplate()" title="New template">+</button></h3>` +
+      (templates.length? templates.map(t=>`
+        <div class="rail-item ${t.id===activeTemplateId?'active':''}" onclick="selectTemplate('${t.id}','library')">
+          <span class="rname">${esc(t.name)}</span>
+        </div>`).join('') : `<div class="rail-empty">No templates yet.</div>`);
+  } else if(TAB==='design'){
+    rail.innerHTML = `<h3>Templates <button class="icon-btn" onclick="createTemplate()" title="New template">+</button></h3>` +
+      (templates.length? templates.map(t=>`
+        <div class="rail-item ${t.id===activeTemplateId?'active':''}" onclick="selectTemplate('${t.id}','design')">
+          <span class="rname">${esc(t.name)}</span>
+          <button class="icon-btn" onclick="event.stopPropagation();duplicateTemplate('${t.id}')" title="Duplicate">⧉</button>
+          <button class="icon-btn" onclick="event.stopPropagation();deleteTemplate('${t.id}')" title="Delete">×</button>
+        </div>`).join('') : `<div class="rail-empty">No templates yet. Click + to start.</div>`);
+  } else if(TAB==='fill'){
+    rail.innerHTML = `<h3>Choose Template</h3>` +
+      (templates.length? templates.map(t=>`
+        <div class="rail-item ${t.id===activeTemplateId?'active':''}" onclick="startFill('${t.id}')">
+          <span class="rname">${esc(t.name)}</span>
+        </div>`).join('') : `<div class="rail-empty">Create a template in Design first.</div>`);
+  } else if(TAB==='records'){
+    rail.innerHTML = `<h3>Filter by Template</h3>
+      <div class="rail-item ${!activeTemplateId?'active':''}" onclick="activeTemplateId=null;render();"><span class="rname">All records</span></div>` +
+      templates.map(t=>`
+        <div class="rail-item ${t.id===activeTemplateId?'active':''}" onclick="activeTemplateId='${t.id}';activeRecordId=null;render();">
+          <span class="rname">${esc(t.name)}</span>
+        </div>`).join('');
+  }
+}
+
+/* ---------------- canvas router ---------------- */
+function renderCanvas(){
+  const c = document.getElementById('canvas');
+  if(TAB==='library') return renderLibrary(c);
+  if(TAB==='design') return renderDesign(c);
+  if(TAB==='fill') return renderFill(c);
+  if(TAB==='records') return renderRecords(c);
+}
+
+/* ---------------- LIBRARY ---------------- */
+function renderLibrary(c){
+  if(templates.length===0){
+    c.innerHTML = emptyState('No checklists yet','Build your first configurable QC/QA checklist — headers, Y/N/NA questions, AQL defect tables, or dynamic logs.','Create a checklist','createTemplate()');
+    return;
+  }
+  c.innerHTML = `<div class="lib-grid">` + templates.map(t=>{
+    const secCount = t.sections.length;
+    const qCount = t.sections.reduce((n,s)=> n + (s.type==='checklist'? (s.rows||[]).length : (s.type==='table'?1:0)),0);
+    const recCount = instances.filter(i=>i.templateId===t.id).length;
+    return `<div class="lib-card" onclick="selectTemplate('${t.id}','design')">
+      <div class="lc-title">${esc(t.name)}</div>
+      <div class="lc-code mono">${esc(t.docNo)} · Rev ${esc(t.rev)}</div>
+      <div class="lc-stats"><span>${secCount} section${secCount!==1?'s':''}</span><span>${qCount} item${qCount!==1?'s':''}</span><span>${recCount} record${recCount!==1?'s':''}</span></div>
+      <div class="lc-actions">
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();startFill('${t.id}')">Fill</button>
+        <button class="btn btn-sm" onclick="event.stopPropagation();selectTemplate('${t.id}','design')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteTemplate('${t.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+function emptyState(big,small,btnLabel,onclick){
+  return `<div class="empty-state"><div class="big">${big}</div><div class="small">${small}</div>
+    <button class="btn btn-primary" onclick="${onclick}">${btnLabel}</button></div>`;
+}
+function selectTemplate(id, goTab){ activeTemplateId=id; if(goTab) TAB=goTab; render(); }
+async function createTemplate(){
+  const t = newTemplate();
+  templates.push(t); activeTemplateId=t.id; TAB='design';
+  await saveTemplates(); render(); toast('New template created');
+}
+async function duplicateTemplate(id){
+  const src = findTemplate(id); if(!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = uid(); copy.name = src.name + ' (copy)';
+  reassignIds(copy);
+  templates.push(copy); activeTemplateId=copy.id;
+  await saveTemplates(); render(); toast('Duplicated');
+}
+function reassignIds(t){
+  t.headerFields.forEach(f=>f.id=uid());
+  t.sections.forEach(s=>{ s.id=uid();
+    if(s.rows) s.rows.forEach(r=>r.id=uid());
+    if(s.columns) s.columns.forEach(cc=>cc.id=uid());
+  });
+}
+async function deleteTemplate(id){
+  if(!confirm('Delete this template? Saved records for it will remain but lose their live form.')) return;
+  templates = templates.filter(t=>t.id!==id);
+  if(activeTemplateId===id) activeTemplateId=null;
+  await saveTemplates(); render(); toast('Template deleted');
+}
+
+/* ---------------- DESIGN ---------------- */
+function renderDesign(c){
+  const t = findTemplate(activeTemplateId);
+  if(!t){ c.innerHTML = emptyState('Pick or create a template','Select a template from the left, or start a new one.','New template','createTemplate()'); return; }
+  c.innerHTML = `
+  <div class="doc">
+    <div class="doc-head">
+      <div class="titles">
+        <input value="${escAttr(t.name)}" oninput="t_setField('name',this.value)" />
+      </div>
+      <div class="doc-code">
+        Doc No. <input value="${escAttr(t.docNo)}" oninput="t_setField('docNo',this.value)" /><br/>
+        Rev <input style="width:40px" value="${escAttr(t.rev)}" oninput="t_setField('rev',this.value)" />
+        Dept <input style="width:60px" value="${escAttr(t.dept)}" oninput="t_setField('dept',this.value)" />
+      </div>
+    </div>
+
+    <div class="section-head"><div class="stitle">Header Fields</div>
+      <button class="btn btn-sm" onclick="t_addHeaderField()">+ Field</button>
+    </div>
+    <div class="meta-grid">
+      ${t.headerFields.map(f=>`
+        <div class="meta-cell">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input value="${escAttr(f.label)}" oninput="t_setHeaderLabel('${f.id}',this.value)" placeholder="Field label"/>
+            <select onchange="t_setHeaderType('${f.id}',this.value)" style="width:90px">
+              <option value="text" ${f.type==='text'?'selected':''}>Text</option>
+              <option value="number" ${f.type==='number'?'selected':''}>Number</option>
+              <option value="date" ${f.type==='date'?'selected':''}>Date</option>
+            </select>
+            <button class="icon-btn" onclick="t_removeHeaderField('${f.id}')" title="Remove">×</button>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    ${t.sections.map((s,idx)=>renderDesignSection(t,s,idx)).join('')}
+
+    <div style="margin-top:6px;display:flex;gap:8px;">
+      <button class="btn" onclick="t_addSection('checklist')">+ Checklist section</button>
+      <button class="btn" onclick="t_addSection('table')">+ Data table section</button>
+      <button class="btn" onclick="t_addSection('note')">+ Note / instruction</button>
+    </div>
+
+    <div class="footer-block">
+      <div style="display:flex;gap:12px;">
+        <button class="btn btn-primary" onclick="saveActiveTemplate()">Save changes</button>
+        <button class="btn" onclick="startFill('${t.id}')">Preview in Fill mode</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderDesignSection(t,s,idx){
+  const typeLabel = s.type==='checklist'?'Checklist':(s.type==='table'?'Data table':'Note');
+  let body='';
+  if(s.type==='checklist'){
+    body = `<table class="qtable"><thead><tr>
+        <th class="row-sr">Sr.</th><th>Question</th><th style="width:110px">Answer type</th><th style="width:90px">Limit (AQL only)</th><th class="row-del"></th>
+      </tr></thead><tbody>
+      ${(s.rows||[]).map((r,i)=>`
+        <tr>
+          <td class="row-sr">${i+1}</td>
+          <td><input class="row-qtext-input" value="${escAttr(r.text)}" oninput="row_setText('${s.id}','${r.id}',this.value)"/></td>
+          <td>
+            <select onchange="row_setKind('${s.id}','${r.id}',this.value)">
+              <option value="yesno" ${r.kind==='yesno'?'selected':''}>Yes / No / N-A</option>
+              <option value="aql" ${r.kind==='aql'?'selected':''}>AQL defect</option>
+              <option value="numeric" ${r.kind==='numeric'?'selected':''}>Numeric</option>
+              <option value="text" ${r.kind==='text'?'selected':''}>Free text</option>
+            </select>
+          </td>
+          <td>${r.kind==='aql' ? `<input type="number" step="0.1" value="${r.limit??0}" oninput="row_setLimit('${s.id}','${r.id}',this.value)"/>` : ''}</td>
+          <td class="row-del"><button class="icon-btn" onclick="row_remove('${s.id}','${r.id}')">×</button></td>
+        </tr>`).join('')}
+    </tbody></table>
+    <div class="build-row-tools"><button class="btn btn-sm" onclick="row_add('${s.id}')">+ Row</button></div>`;
+  } else if(s.type==='table'){
+    body = `<div class="dt-wrap"><table class="qtable"><thead><tr>
+      ${(s.columns||[]).map(col=>`<th><input class="row-qtext-input mono" style="font-size:11px" value="${escAttr(col.label)}" oninput="col_setLabel('${s.id}','${col.id}',this.value)"/></th>`).join('')}
+      <th class="row-del"></th>
+    </tr></thead><tbody><tr>${(s.columns||[]).map(()=>`<td style="color:var(--muted);font-style:italic;">filled at runtime</td>`).join('')}<td></td></tr></tbody></table></div>
+    <div class="build-row-tools">
+      <button class="btn btn-sm" onclick="col_add('${s.id}')">+ Column</button>
+      ${(s.columns||[]).length>0? `<button class="btn btn-sm btn-danger" onclick="col_removeLast('${s.id}')">Remove last column</button>`:''}
+    </div>`;
+  } else if(s.type==='note'){
+    body = `<div class="note-block"><textarea rows="2" placeholder="Instruction or note text shown on the form..." oninput="note_setText('${s.id}',this.value)">${esc(s.text||'')}</textarea></div>`;
+  }
+  return `<div class="section">
+    <div class="section-head">
+      <div class="stitle"><span class="num">${String(idx+1).padStart(2,'0')}</span>
+        <input class="stitle-input" value="${escAttr(s.title)}" oninput="s_setTitle('${s.id}',this.value)"/>
+        <span class="section-type-badge">${typeLabel}</span>
+      </div>
+      <div class="section-actions">
+        <button class="icon-btn" title="Move up" onclick="s_move('${s.id}',-1)">↑</button>
+        <button class="icon-btn" title="Move down" onclick="s_move('${s.id}',1)">↓</button>
+        <button class="icon-btn" title="Delete section" onclick="s_remove('${s.id}')">×</button>
+      </div>
+    </div>
+    ${body}
+  </div>`;
+}
+
+/* -- design mutators -- */
+function activeT(){ return findTemplate(activeTemplateId); }
+function t_setField(k,v){ activeT()[k]=v; renderRail(); rerenderDesignSoft(); }
+function t_addHeaderField(){ activeT().headerFields.push({id:uid(),label:'New field',type:'text'}); renderCanvas(); }
+function t_setHeaderLabel(id,v){ const f=activeT().headerFields.find(f=>f.id===id); f.label=v; }
+function t_setHeaderType(id,v){ const f=activeT().headerFields.find(f=>f.id===id); f.type=v; }
+function t_removeHeaderField(id){ const t=activeT(); t.headerFields=t.headerFields.filter(f=>f.id!==id); renderCanvas(); }
+function t_addSection(type){
+  const t=activeT();
+  const base={id:uid(),type,title:type==='checklist'?'New section':(type==='table'?'New data table':'Note')};
+  if(type==='checklist') base.rows=[{id:uid(),kind:'yesno',text:'New question'}];
+  if(type==='table') base.columns=[{id:uid(),label:'Column 1'},{id:uid(),label:'Column 2'}];
+  if(type==='note') base.text='';
+  t.sections.push(base); renderCanvas();
+}
+function s_setTitle(sid,v){ const s=activeT().sections.find(s=>s.id===sid); s.title=v; }
+function s_move(sid,dir){
+  const t=activeT(); const i=t.sections.findIndex(s=>s.id===sid);
+  const j=i+dir; if(j<0||j>=t.sections.length) return;
+  [t.sections[i],t.sections[j]]=[t.sections[j],t.sections[i]];
+  renderCanvas();
+}
+function s_remove(sid){ const t=activeT(); t.sections=t.sections.filter(s=>s.id!==sid); renderCanvas(); }
+function row_add(sid){ const s=activeT().sections.find(s=>s.id===sid); s.rows.push({id:uid(),kind:'yesno',text:'New question'}); renderCanvas(); }
+function row_remove(sid,rid){ const s=activeT().sections.find(s=>s.id===sid); s.rows=s.rows.filter(r=>r.id!==rid); renderCanvas(); }
+function row_setText(sid,rid,v){ const s=activeT().sections.find(s=>s.id===sid); s.rows.find(r=>r.id===rid).text=v; }
+function row_setKind(sid,rid,v){ const s=activeT().sections.find(s=>s.id===sid); const r=s.rows.find(r=>r.id===rid); r.kind=v; if(v==='aql'&&r.limit===undefined) r.limit=0; renderCanvas(); }
+function row_setLimit(sid,rid,v){ const s=activeT().sections.find(s=>s.id===sid); s.rows.find(r=>r.id===rid).limit=parseFloat(v)||0; }
+function col_add(sid){ const s=activeT().sections.find(s=>s.id===sid); s.columns.push({id:uid(),label:'Column'}); renderCanvas(); }
+function col_removeLast(sid){ const s=activeT().sections.find(s=>s.id===sid); s.columns.pop(); renderCanvas(); }
+function col_setLabel(sid,cid,v){ const s=activeT().sections.find(s=>s.id===sid); s.columns.find(c=>c.id===cid).label=v; }
+function note_setText(sid,v){ const s=activeT().sections.find(s=>s.id===sid); s.text=v; }
+function rerenderDesignSoft(){ /* no-op: inputs keep focus since we don't full-rerender on every keystroke */ }
+async function saveActiveTemplate(){ await saveTemplates(); toast('Template saved'); renderRail(); }
+
+/* ---------------- FILL ---------------- */
+function startFill(templateId){
+  activeTemplateId = templateId;
+  const t = findTemplate(templateId);
+  activeInstanceDraft = blankInstance(t);
+  TAB='fill'; render();
+}
+function renderFill(c){
+  const t = findTemplate(activeTemplateId);
+  if(!t){ c.innerHTML = emptyState('Choose a template to fill','Pick a checklist from the left to start recording results.','Go to Library',"setTab('library')"); return; }
+  if(!activeInstanceDraft || activeInstanceDraft.templateId!==t.id){ activeInstanceDraft = blankInstance(t); }
+  const inst = activeInstanceDraft;
+  const status = computeStatus(t, inst);
+  c.innerHTML = `
+  <div class="doc">
+    <div class="stamp ${status}">${status==='pending'?'Pending':(status==='pass'?'Pass':'Non-Conformance')}</div>
+    <div class="doc-head">
+      <div class="titles"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;">${esc(t.name)}</div></div>
+      <div class="doc-code">Doc No. ${esc(t.docNo)}<br/>Rev ${esc(t.rev)} &nbsp; Dept ${esc(t.dept)}</div>
+    </div>
+    <div class="meta-grid">
+      ${t.headerFields.map(f=>`
+        <div class="meta-cell">
+          <label class="field-label">${esc(f.label)}</label>
+          <input type="${f.type==='number'?'number':(f.type==='date'?'date':'text')}" value="${escAttr(inst.header[f.id]||'')}" oninput="f_setHeader('${f.id}',this.value)"/>
+        </div>`).join('')}
+      <div class="meta-cell">
+        <label class="field-label">Filled by</label>
+        <input value="${escAttr(inst.filledBy||'')}" oninput="f_setFilledBy(this.value)"/>
+      </div>
+    </div>
+
+    ${t.sections.map((s,idx)=>renderFillSection(t,s,idx,inst)).join('')}
+
+    <div class="footer-block">
+      <div class="sig-line"><div class="lbl">Analyst / Observed by, Sign &amp; Date</div><div class="line"></div></div>
+      <div class="sig-line"><div class="lbl">Reviewed / Verified by, Sign &amp; Date</div><div class="line"></div></div>
+    </div>
+    <div style="margin-top:20px;display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="saveInstance()">Save record</button>
+      <button class="btn" onclick="printCanvas()">Print / Export PDF</button>
+      <button class="btn btn-danger" onclick="startFill('${t.id}')">Clear form</button>
+    </div>
+  </div>`;
+}
+function renderFillSection(t,s,idx,inst){
+  let body='';
+  if(s.type==='checklist'){
+    body = `<table class="qtable"><thead><tr><th class="row-sr">Sr.</th><th>Question</th><th style="width:230px">Response</th></tr></thead><tbody>
+      ${(s.rows||[]).map((r,i)=>{
+        const a = inst.answers[r.id];
+        let cell='';
+        if(r.kind==='yesno'){
+          cell = `<div class="yn-group">
+            ${['Yes','No','N/A'].map(v=>`
+              <label class="yn-opt sel-${v==='Yes'?'yes':(v==='No'?'no':'na')} ${a===v?'chosen':''}">
+                <input type="radio" name="yn-${r.id}" ${a===v?'checked':''} onchange="f_setAnswer('${r.id}','${v}')"/>${v}
+              </label>`).join('')}
+          </div>`;
+        } else if(r.kind==='aql'){
+          const obs = (a&&a.observed!==undefined)?a.observed:'';
+          const num = obs!==''? parseFloat(obs) : null;
+          const flagClass = num===null?'pending':(num>r.limit?'bad':'ok');
+          const flagText = num===null?'—':(num>r.limit?'Exceeds limit':'Within limit');
+          cell = `<div class="aql-inputs">
+            <span style="font-size:11px;color:var(--muted)">Limit ${r.limit}%</span>
+            <input type="number" step="0.1" placeholder="Obs." value="${obs}" oninput="f_setAqlObserved('${r.id}',this.value)"/>
+            <span class="aql-flag ${flagClass}">${flagText}</span>
+          </div>`;
+        } else if(r.kind==='numeric'){
+          cell = `<input type="number" value="${a??''}" oninput="f_setAnswer('${r.id}',this.value)"/>`;
+        } else {
+          cell = `<input type="text" value="${escAttr(a||'')}" oninput="f_setAnswer('${r.id}',this.value)"/>`;
+        }
+        return `<tr><td class="row-sr">${i+1}</td><td>${esc(r.text)}</td><td>${cell}</td></tr>`;
+      }).join('')}
+    </tbody></table>`;
+  } else if(s.type==='table'){
+    const rows = inst.tableRows[s.id] || [];
+    body = `<div class="dt-wrap"><table class="qtable"><thead><tr>
+      ${(s.columns||[]).map(col=>`<th>${esc(col.label)}</th>`).join('')}<th class="row-del"></th>
+    </tr></thead><tbody>
+      ${rows.map((rowVals,ri)=>`<tr>
+        ${(s.columns||[]).map(col=>`<td><input value="${escAttr(rowVals[col.id]||'')}" oninput="f_setTableCell('${s.id}',${ri},'${col.id}',this.value)"/></td>`).join('')}
+        <td class="row-del"><button class="icon-btn" onclick="f_removeTableRow('${s.id}',${ri})">×</button></td>
+      </tr>`).join('')}
+      ${rows.length===0?`<tr><td colspan="${(s.columns||[]).length+1}" style="color:var(--muted);font-style:italic;">No rows yet</td></tr>`:''}
+    </tbody></table></div>
+    <button class="btn btn-sm add-row-btn" onclick="f_addTableRow('${s.id}')">+ Add row</button>`;
+  } else if(s.type==='note'){
+    body = `<div class="note-block">${esc(s.text||'')||'<span style="opacity:.6">(no note)</span>'}</div>`;
+  }
+  return `<div class="section">
+    <div class="section-head"><div class="stitle"><span class="num">${String(idx+1).padStart(2,'0')}</span>${esc(s.title)}</div></div>
+    ${body}
+  </div>`;
+}
+function f_setHeader(fid,v){ activeInstanceDraft.header[fid]=v; }
+function f_setFilledBy(v){ activeInstanceDraft.filledBy=v; }
+function f_setAnswer(rid,v){ activeInstanceDraft.answers[rid]=v; renderCanvas(); }
+function f_setAqlObserved(rid,v){
+  const a = activeInstanceDraft.answers[rid] || {};
+  a.observed = v; activeInstanceDraft.answers[rid]=a; renderCanvas();
+}
+function f_addTableRow(sid){
+  if(!activeInstanceDraft.tableRows[sid]) activeInstanceDraft.tableRows[sid]=[];
+  activeInstanceDraft.tableRows[sid].push({}); renderCanvas();
+}
+function f_removeTableRow(sid,ri){ activeInstanceDraft.tableRows[sid].splice(ri,1); renderCanvas(); }
+function f_setTableCell(sid,ri,cid,v){ activeInstanceDraft.tableRows[sid][ri][cid]=v; }
+
+async function saveInstance(){
+  const t = findTemplate(activeTemplateId);
+  activeInstanceDraft.status = computeStatus(t, activeInstanceDraft);
+  activeInstanceDraft.savedAt = new Date().toISOString();
+  const existingIdx = instances.findIndex(i=>i.id===activeInstanceDraft.id);
+  if(existingIdx>=0) instances[existingIdx]=activeInstanceDraft; else instances.push(activeInstanceDraft);
+  await saveInstances();
+  toast('Record saved — ' + (activeInstanceDraft.status==='fail'?'Non-Conformance flagged':'looks good'));
+  activeInstanceDraft = blankInstance(t);
+  render();
+}
+function printCanvas(){ window.print(); }
+
+/* ---------------- RECORDS ---------------- */
+function renderRecords(c){
+  let list = instances.slice().sort((a,b)=> new Date(b.savedAt||b.createdAt) - new Date(a.savedAt||a.createdAt));
+  if(activeTemplateId) list = list.filter(i=>i.templateId===activeTemplateId);
+  if(activeRecordId){
+    const inst = instances.find(i=>i.id===activeRecordId);
+    const t = findTemplate(inst.templateId);
+    c.innerHTML = `<div style="margin-bottom:12px;"><button class="btn btn-sm" onclick="activeRecordId=null;render();">← Back to records</button></div>`;
+    if(!t){
+      c.innerHTML += `<div class="doc"><p>Original template was deleted. Raw record data:</p><pre class="mono" style="white-space:pre-wrap;font-size:11px;">${esc(JSON.stringify(inst,null,2))}</pre></div>`;
+      return;
+    }
+    activeInstanceDraftBackup = activeInstanceDraft;
+    const tmp = activeInstanceDraft; activeInstanceDraft = inst;
+    const holder = document.createElement('div'); document.getElementById('canvas').appendChild(holder);
+    renderFillReadOnlyWrap(t, inst);
+    activeInstanceDraft = tmp;
+    return;
+  }
+  if(list.length===0){ c.innerHTML += emptyState('No records yet','Filled checklists will appear here once saved from Fill & Run.','Go fill one',"setTab('fill')"); return; }
+  c.innerHTML += list.map(inst=>{
+    const badge = inst.status||'pending';
+    return `<div class="rec-card ${badge}" onclick="viewRecord('${inst.id}')">
+      <div>
+        <div class="rec-title">${esc(inst.templateName)}</div>
+        <div class="rec-meta">${esc(inst.docNo||'')} · ${fmtDate(inst.savedAt||inst.createdAt)} ${inst.filledBy?('· '+esc(inst.filledBy)):''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="rec-badge ${badge==='fail'?'fail':'pass'}">${badge==='fail'?'Non-Conformance':(badge==='pass'?'Pass':'Pending')}</span>
+        <button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteRecord('${inst.id}')">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function viewRecord(id){ activeRecordId=id; render(); }
+function renderFillReadOnlyWrap(t, inst){
+  const c = document.getElementById('canvas');
+  const status = inst.status || computeStatus(t, inst);
+  const div = document.createElement('div');
+  div.innerHTML = `<div class="doc">
+    <div class="stamp ${status}">${status==='pending'?'Pending':(status==='pass'?'Pass':'Non-Conformance')}</div>
+    <div class="doc-head">
+      <div class="titles"><div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;">${esc(t.name)}</div></div>
+      <div class="doc-code">Doc No. ${esc(t.docNo)}<br/>Rev ${esc(t.rev)} &nbsp; Dept ${esc(t.dept)}</div>
+    </div>
+    <div class="meta-grid">
+      ${t.headerFields.map(f=>`<div class="meta-cell"><label class="field-label">${esc(f.label)}</label><div>${esc(inst.header[f.id]||'—')}</div></div>`).join('')}
+      <div class="meta-cell"><label class="field-label">Filled by</label><div>${esc(inst.filledBy||'—')}</div></div>
+    </div>
+    ${t.sections.map((s,idx)=>renderReadOnlySection(s,idx,inst)).join('')}
+    <div style="margin-top:18px;"><button class="btn" onclick='exportRecordJson(${JSON.stringify(inst.id)})'>Export JSON</button>
+    <button class="btn" onclick="printCanvas()">Print</button></div>
+  </div>`;
+  c.appendChild(div);
+}
+function renderReadOnlySection(s,idx,inst){
+  let body='';
+  if(s.type==='checklist'){
+    body = `<table class="qtable"><thead><tr><th class="row-sr">Sr.</th><th>Question</th><th style="width:200px">Response</th></tr></thead><tbody>
+    ${(s.rows||[]).map((r,i)=>{
+      let val='—';
+      const a = inst.answers[r.id];
+      if(r.kind==='aql'){ const obs=a&&a.observed; val = obs!==undefined&&obs!==''? `${obs}% (limit ${r.limit}%)`:'—'; }
+      else if(a){ val = String(a); }
+      return `<tr><td class="row-sr">${i+1}</td><td>${esc(r.text)}</td><td>${esc(val)}</td></tr>`;
+    }).join('')}
+    </tbody></table>`;
+  } else if(s.type==='table'){
+    const rows = inst.tableRows[s.id]||[];
+    body = `<div class="dt-wrap"><table class="qtable"><thead><tr>${(s.columns||[]).map(c=>`<th>${esc(c.label)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r=>`<tr>${(s.columns||[]).map(c=>`<td>${esc(r[c.id]||'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  } else if(s.type==='note'){
+    body = `<div class="note-block">${esc(s.text||'')}</div>`;
+  }
+  return `<div class="section"><div class="section-head"><div class="stitle"><span class="num">${String(idx+1).padStart(2,'0')}</span>${esc(s.title)}</div></div>${body}</div>`;
+}
+async function deleteRecord(id){
+  if(!confirm('Delete this record?')) return;
+  instances = instances.filter(i=>i.id!==id);
+  await saveInstances(); render(); toast('Record deleted');
+}
+function exportRecordJson(id){
+  const inst = instances.find(i=>i.id===id);
+  const blob = new Blob([JSON.stringify(inst,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=(inst.templateName||'record')+'.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+function fmtDate(iso){ try{ const d=new Date(iso); return d.toLocaleString(); }catch(e){ return iso||''; } }
+
+/* ---------------- utils ---------------- */
+function esc(s){ return (s??'').toString().replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+
+/* ---------------- boot ---------------- */
+document.querySelectorAll('.tab-btn').forEach(b=> b.addEventListener('click',()=>setTab(b.dataset.tab)));
+(async function init(){
+  await loadAll();
+  render();
+})();
+</script>
+</body>
+</html>

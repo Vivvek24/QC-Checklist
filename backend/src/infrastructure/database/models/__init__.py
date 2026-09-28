@@ -39,6 +39,10 @@ from src.infrastructure.database.models.masters.section_model import SectionMode
 from src.infrastructure.database.models.masters.stage_question_mapping_model import StageQuestionMappingModel  # noqa: F401
 from src.infrastructure.database.models.masters.question_option_model import QuestionOptionModel  # noqa: F401
 from src.infrastructure.database.models.masters.test_master_model import TestMasterModel  # noqa: F401
+from src.infrastructure.database.models.masters.template_model import (  # noqa: F401
+    TemplateLayoutColumnModel,
+    TemplateModel,
+)
 
 # ─── QC Checklist ───
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import ChecklistRequestModel  # noqa: F401

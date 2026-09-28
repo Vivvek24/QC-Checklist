@@ -131,6 +131,11 @@ _PERMISSION_TABLE = [
     ("stage_question_mappings.create", "API", "stage_question_mappings", "CREATE", "Create Stage Question Mapping"),
     ("stage_question_mappings.update", "API", "stage_question_mappings", "UPDATE", "Update Stage Question Mapping"),
     ("stage_question_mappings.delete", "API", "stage_question_mappings", "DELETE", "Delete Stage Question Mapping"),
+
+    # ─── Template (checklist column design) ───
+    ("templates.read",   "API", "templates", "READ",   "View Templates"),
+    ("templates.update", "API", "templates", "UPDATE", "Create/Update Templates"),
+    ("templates.delete", "API", "templates", "DELETE", "Delete Templates"),
     # ─── Test Master ───
     ("test_masters.list",   "API", "test_masters", "READ",   "List Test Masters"),
     ("test_masters.create", "API", "test_masters", "CREATE", "Create Test Master"),
