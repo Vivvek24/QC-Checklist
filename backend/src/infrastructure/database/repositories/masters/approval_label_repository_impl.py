@@ -45,6 +45,14 @@ class ApprovalLabelRepositoryImpl(SqlAlchemyRepository[ApprovalLabel, ApprovalLa
             stmt = stmt.where(ApprovalLabelModel.id != exclude_id)
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
+    async def list_active_by_stage(self, stage_id: int) -> list[ApprovalLabel]:
+        stmt = select(ApprovalLabelModel).where(
+            ApprovalLabelModel.stage_id == stage_id,
+            ApprovalLabelModel.is_active.is_(True),
+        ).order_by(ApprovalLabelModel.id)
+        models = list((await self._session.execute(stmt)).scalars().all())
+        return await self._hydrate(models)
+
     async def create(self, entity: ApprovalLabel) -> ApprovalLabel:
         m = ApprovalLabelModel(label=entity.label, stage_id=entity.stage_id, is_active=entity.is_active,
                                created_by=entity.created_by, modified_by=entity.modified_by)

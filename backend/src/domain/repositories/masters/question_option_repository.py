@@ -19,3 +19,8 @@ class IQuestionOptionRepository(IRepository[QuestionOption]):
     async def list_by_question(self, question_id: int) -> list[QuestionOption]:
         """Return all options for a specific question."""
         ...
+
+    @abstractmethod
+    async def list_by_questions(self, question_ids: list[int]) -> list[QuestionOption]:
+        """Return all active options for a set of questions, in one query."""
+        ...

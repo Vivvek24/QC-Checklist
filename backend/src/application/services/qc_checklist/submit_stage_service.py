@@ -34,8 +34,12 @@ from src.infrastructure.database.models.masters.format_stage_mapping_model impor
 from src.infrastructure.database.models.masters.stage_model import StageModel
 from src.infrastructure.database.models.masters.stage_question_mapping_model import StageQuestionMappingModel
 from src.infrastructure.database.models.masters.approval_label_model import ApprovalLabelModel, ApprovalLabelUserRoleModel
-from src.domain.exceptions.domain_exceptions import EntityNotFoundError
-from src.application.services.qc_checklist.validate_checklist_service import ValidateChecklistService
+from src.domain.exceptions.domain_exceptions import BusinessRuleViolationError, EntityNotFoundError
+from src.infrastructure.security.auth_manager import AuthenticationError
+from src.application.services.qc_checklist.validate_checklist_service import (
+    ValidateChecklistService,
+    ValidationResult,
+)
 
 
 VALID_ACTIONS = ("submit", "save_draft", "approve", "refer_back")
@@ -60,6 +64,20 @@ class QuestionAnswerPayload:
 
 
 @dataclass
+class ExtraStagePayload:
+    """A secondary stage submitted alongside the primary one.
+
+    Used so Basic Details (the request header, which has no approval snip or
+    Submit button of its own) is persisted and moved off its initial status in
+    the same request as the first real stage's submit. Its answers are saved
+    and the stage is advanced to 'Pending'.
+    """
+    format_stage_mapping_id: int
+    checklist_stage_id: int | None = None
+    answers: list[QuestionAnswerPayload] | None = None
+
+
+@dataclass
 class SubmitStageRequest:
     """Input for the submit stage action."""
     checklist_request_id: int | None  # None for first-time creation
@@ -70,6 +88,9 @@ class SubmitStageRequest:
     remark_id: int | None = None
     remark_text: str = ""
     answers: list[QuestionAnswerPayload] | None = None
+    # Secondary stages (e.g. Basic Details) persisted + advanced to Pending
+    # together with the primary stage on first submit.
+    extra_stages: list[ExtraStagePayload] | None = None
 
 
 @dataclass
@@ -127,6 +148,12 @@ class SubmitStageService:
             if not checklist_stage:
                 raise EntityNotFoundError("ChecklistStage", f"fsm={request.format_stage_mapping_id}")
 
+        # --- Authorization: only a role configured on this stage may act ---
+        # (save_draft is the filler saving their own work-in-progress; the
+        # fill/approve gate applies to submit/approve/refer_back.)
+        if request.action in ("submit", "approve", "refer_back"):
+            await self._authorize_stage_action(checklist_stage, role_id)
+
         # --- Persist question answers ---
         if request.answers:
             await self._persist_answers(checklist_stage.id, request.answers, user_id, now)
@@ -135,6 +162,11 @@ class SubmitStageService:
         if request.action == "save_draft":
             return await self._save_draft(checklist_request, checklist_stage, user_id, now)
         elif request.action == "submit":
+            # Persist + advance any secondary stages (e.g. Basic Details) that
+            # ride along with the first submit, so the request's header stage
+            # is captured and visible on the dashboard.
+            if request.extra_stages:
+                await self._submit_extra_stages(checklist_request, request.extra_stages, user_id, now)
             return await self._submit(checklist_request, checklist_stage, user_id, role_id, request.remark_id, request.remark_text, now)
         elif request.action == "approve":
             return await self._approve(checklist_request, checklist_stage, user_id, role_id, request.remark_id, request.remark_text, now)
@@ -142,6 +174,118 @@ class SubmitStageService:
             return await self._refer_back(checklist_request, checklist_stage, user_id, role_id, request.remark_id, request.remark_text, now)
         else:
             raise ValueError(f"Unhandled action: {request.action}")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ENFORCEMENT: validation blocking + role authorization
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _raise_if_invalid(validation_result: ValidationResult) -> None:
+        """Block the action if any validation rule failed, surfacing the messages."""
+        if validation_result.is_valid:
+            return
+        messages = [e.message for e in validation_result.errors]
+        detail = "; ".join(dict.fromkeys(messages))  # de-dupe, keep order
+        raise BusinessRuleViolationError(detail or "Validation failed.")
+
+    async def _authorize_stage_action(self, cs: ChecklistStageModel, role_id: int | None) -> None:
+        """Ensure the caller's role is configured to act on this stage.
+
+        A stage's permitted roles come from its approval labels' role mappings
+        (approval_label_user_roles). Stages with NO approval labels — e.g.
+        Basic Details — have no role gate and are left to the endpoint-level
+        permission (anyone who may update checklist requests).
+        """
+        if not cs.format_stage_mapping_id:
+            return
+
+        fsm_result = await self._session.execute(
+            select(FormatStageMappingModel).where(
+                FormatStageMappingModel.id == cs.format_stage_mapping_id
+            )
+        )
+        fsm = fsm_result.scalar_one_or_none()
+        if not fsm:
+            return
+
+        # All role ids allowed on this stage (across all its active labels).
+        allowed_result = await self._session.execute(
+            select(ApprovalLabelUserRoleModel.role_id)
+            .join(
+                ApprovalLabelModel,
+                ApprovalLabelModel.id == ApprovalLabelUserRoleModel.approval_label_id,
+            )
+            .where(
+                ApprovalLabelModel.stage_id == fsm.stage_id,
+                ApprovalLabelModel.is_active.is_(True),
+            )
+        )
+        allowed_role_ids = {r[0] for r in allowed_result.fetchall()}
+
+        # No configured roles on this stage → no role gate (e.g. Basic Details).
+        if not allowed_role_ids:
+            return
+
+        if role_id is None or role_id not in allowed_role_ids:
+            raise AuthenticationError(
+                "Your role is not authorized to act on this stage.",
+                status_code=403,
+            )
+
+    async def _submit_extra_stages(
+        self,
+        cr: ChecklistRequestModel,
+        extra_stages: list[ExtraStagePayload],
+        user_id: int,
+        now: datetime,
+    ) -> None:
+        """Persist answers for and advance secondary stages submitted with the
+        primary one.
+
+        This is how Basic Details — the request header, which has no Submit
+        button of its own — gets captured and moved off its initial status on
+        the first submit. Each extra stage's answers are saved and the stage is
+        set to 'Pending' so it is no longer treated as un-opened/initial.
+        Stages that are already past their initial state are left untouched.
+        """
+        for extra in extra_stages:
+            # Resolve the ChecklistStage for this fsm within the request.
+            cs = None
+            if extra.checklist_stage_id:
+                cs_result = await self._session.execute(
+                    select(ChecklistStageModel).where(
+                        ChecklistStageModel.id == extra.checklist_stage_id
+                    )
+                )
+                cs = cs_result.scalar_one_or_none()
+            if cs is None:
+                cs_result = await self._session.execute(
+                    select(ChecklistStageModel).where(
+                        ChecklistStageModel.checklist_request_id == cr.id,
+                        ChecklistStageModel.format_stage_mapping_id == extra.format_stage_mapping_id,
+                    )
+                )
+                cs = cs_result.scalar_one_or_none()
+            if cs is None:
+                continue
+
+            if extra.answers:
+                await self._persist_answers(cs.id, extra.answers, user_id, now)
+
+            # Validate the extra stage (e.g. Basic Details) on first submit —
+            # blocks the whole submit if its required fields aren't filled.
+            validator = ValidateChecklistService(self._session)
+            self._raise_if_invalid(await validator.validate_stage(cr.id, cs.id))
+
+            # Only advance a stage that's still in its initial/unsubmitted state;
+            # never regress a stage that's already Pending/Approved.
+            if cs.status in ("Initial", "Draft", "", "Saved", "SaveAsDraft"):
+                cs.status = "Pending"
+            cs.user_id = user_id
+            cs.modified_by = str(user_id)
+            cs.modified_date = now
+
+        await self._session.flush()
 
     # ─────────────────────────────────────────────────────────────────────────
     # REQUEST + STAGE CREATION (matches Mendix: all stages + all mappings upfront)
@@ -280,29 +424,36 @@ class SubmitStageService:
         3. For each filtered stage, process StageApprovalLabelMappings
         4. Update stage status and request status_format
         """
-        # Step 1: Validate only the stage being submitted (the one the user filled)
-        # Only validate if there are actual question answers persisted for this stage
+        # Step 1: Validate only the stage being submitted — blocks on failure.
         validator = ValidateChecklistService(self._session)
-        validation_result = await validator.validate_stage(cr.id, cs.id)
-        if not validation_result.is_valid:
-            # Log validation errors but don't block submit for now
-            # The Mendix flow calls validation as a separate pre-check on the frontend
-            # TODO: Re-enable blocking once frontend validation is aligned
-            pass
+        self._raise_if_invalid(await validator.validate_stage(cr.id, cs.id))
 
         # Get format info
         format_type = await self._get_format_type(cr.format_id)
 
-        # Step 2: Update the submitted stage status to Pending
+        # If this is a resubmit of a referred-back stage, reset the approver's
+        # refer-back action(s) so the approval chain reopens for them. Without
+        # this, every mapping already has a date_of_action, so the approver can
+        # never act again and the dashboard shows the button to the wrong user.
+        was_refer_back = cs.status == "ReferBack"
+        if was_refer_back:
+            await self._reset_refer_back_mappings(cs)
+
+        # Step 2: Mark the submitted stage Pending.
         cs.status = "Pending"
         cs.user_id = user_id
         cs.submit_remarks = remark_text
         cs.modified_by = str(user_id)
         cs.modified_date = now
 
-        # Record the submit action on the first unacted approval label mapping
-        # (For Basic Details this does nothing since it has no approval labels)
-        await self._record_approval_action(cs, user_id, role_id, remark_id, remark_text, now)
+        # Record the submit action. On a normal first submit this fills the
+        # initiator's (first unacted) mapping. On a refer-back resubmit, the
+        # initiator's mapping is already acted — update it in place so their
+        # revised remark is captured without re-opening it.
+        if was_refer_back:
+            await self._update_initiator_mapping(cs, user_id, role_id, remark_id, remark_text, now)
+        else:
+            await self._record_approval_action(cs, user_id, role_id, remark_id, remark_text, now)
 
         # Update request status
         cr.status = "Pending"
@@ -427,6 +578,20 @@ class SubmitStageService:
         first_mapping.modified_by = str(user_id)
         first_mapping.modified_date = now
 
+    async def _approve_pending_stages(self, cr: ChecklistRequestModel, user_id: int, now: datetime) -> None:
+        """At final approval, mark any still-Pending stages (notably Basic
+        Details, which stays Pending the whole flow) as Approved."""
+        pending_result = await self._session.execute(
+            select(ChecklistStageModel).where(
+                ChecklistStageModel.checklist_request_id == cr.id,
+                ChecklistStageModel.status == "Pending",
+            )
+        )
+        for stage in pending_result.scalars().all():
+            stage.status = "Approved"
+            stage.modified_by = str(user_id)
+            stage.modified_date = now
+
     async def _check_role_match(self, approval_label_id: int, role_id: int | None) -> bool:
         """Check if user's role matches any of the approval label's configured roles."""
         if not role_id:
@@ -454,7 +619,10 @@ class SubmitStageService:
     # ─────────────────────────────────────────────────────────────────────────
 
     async def _approve(self, cr, cs, user_id: int, role_id: int | None, remark_id, remark_text, now) -> SubmitStageResult:
-        """Approve — stage becomes Approved, next stage opens."""
+        """Approve — stage becomes Approved, next stage opens. Blocks on validation failure."""
+        validator = ValidateChecklistService(self._session)
+        self._raise_if_invalid(await validator.validate_stage(cr.id, cs.id))
+
         cs.status = "Approved"
         cs.approved_remark = remark_text
         cs.modified_by = str(user_id)
@@ -467,9 +635,13 @@ class SubmitStageService:
         next_opened = await self._open_next_stage(cr, cs, user_id, now)
 
         if not next_opened:
-            # This was the last stage — mark request as approved
+            # This was the last stage — the whole request is approved.
             cr.is_last_stage = True
             cr.status = "Approved"
+            # Basic Details stays Pending the whole flow (it's the request
+            # header, not an approval stage) — flip it to Approved now, at
+            # final approval, along with any other still-pending stages.
+            await self._approve_pending_stages(cr, user_id, now)
         else:
             cr.status = "Pending"
 
@@ -494,11 +666,13 @@ class SubmitStageService:
     # ─────────────────────────────────────────────────────────────────────────
 
     async def _refer_back(self, cr, cs, user_id: int, role_id: int | None, remark_id, remark_text, now) -> SubmitStageResult:
-        """Refer back — stage goes to ReferBack, only original user can edit."""
+        """Refer back — the stage goes to ReferBack (only the original user can
+        edit it), but the request stays Pending: the request as a whole is still
+        in progress, just this one stage is back with the analyst."""
         cs.status = "ReferBack"
         cs.modified_by = str(user_id)
         cs.modified_date = now
-        cr.status = "ReferBack"
+        cr.status = "Pending"
         cr.modified_by = str(user_id)
         cr.modified_date = now
 
@@ -583,6 +757,53 @@ class SubmitStageService:
                 modified_date=now,
             )
             self._session.add(new_mapping)
+
+    async def _reset_refer_back_mappings(self, cs: ChecklistStageModel) -> None:
+        """Clear the approver's refer-back action(s) on a stage so the approval
+        chain reopens when the initiator resubmits. The initiator's own mapping
+        (is_refer_back=False) is left intact and updated separately."""
+        result = await self._session.execute(
+            select(StageApprovalLabelMappingModel).where(
+                StageApprovalLabelMappingModel.checklist_stage_id == cs.id,
+                StageApprovalLabelMappingModel.is_refer_back.is_(True),
+            )
+        )
+        for mapping in result.scalars().all():
+            mapping.user_id = None
+            mapping.role_id = None
+            mapping.remark_id = None
+            mapping.remark = ""
+            mapping.date_of_action = None
+            mapping.is_refer_back = False
+            mapping.is_show = False
+
+    async def _update_initiator_mapping(
+        self, cs: ChecklistStageModel, user_id: int, role_id: int | None,
+        remark_id, remark_text, now: datetime,
+    ) -> None:
+        """On a refer-back resubmit, update the initiator's already-acted mapping
+        in place (their revised remark) rather than opening a new one."""
+        result = await self._session.execute(
+            select(StageApprovalLabelMappingModel).where(
+                StageApprovalLabelMappingModel.checklist_stage_id == cs.id,
+                StageApprovalLabelMappingModel.date_of_action.is_not(None),
+                StageApprovalLabelMappingModel.is_refer_back.is_(False),
+            ).order_by(StageApprovalLabelMappingModel.id).limit(1)
+        )
+        mapping = result.scalar_one_or_none()
+        if mapping:
+            mapping.user_id = user_id
+            mapping.role_id = role_id
+            mapping.remark_id = remark_id
+            mapping.remark = remark_text or ""
+            mapping.date_of_action = now
+            mapping.is_show = True
+            mapping.modified_by = str(user_id)
+            mapping.modified_date = now
+        else:
+            # No prior initiator mapping (shouldn't happen on resubmit) — fall
+            # back to the normal unacted-mapping flow.
+            await self._record_approval_action(cs, user_id, role_id, remark_id, remark_text, now)
 
     async def _open_next_stage(self, cr, current_stage, user_id: int, now) -> bool:
         """Open the next stage after approval. Returns True if a next stage was opened."""
@@ -714,30 +935,55 @@ class SubmitStageService:
             # Keep existing status_format unchanged
             return
 
+        async def _stage_name(stage: ChecklistStageModel) -> str | None:
+            if not stage.format_stage_mapping_id:
+                return None
+            fsm_result = await self._session.execute(
+                select(FormatStageMappingModel).where(
+                    FormatStageMappingModel.id == stage.format_stage_mapping_id
+                )
+            )
+            fsm = fsm_result.scalar_one_or_none()
+            if not fsm:
+                return None
+            sm_result = await self._session.execute(
+                select(StageModel).where(StageModel.id == fsm.stage_id)
+            )
+            sm = sm_result.scalar_one_or_none()
+            return sm.stage_name if sm else None
+
+        # A referred-back stage is the active one needing attention — surface it
+        # as "<Stage> - Referred Back" rather than falling through to a Pending
+        # stage (which would wrongly land on Basic Details, the always-Pending
+        # request header).
+        refer_result = await self._session.execute(
+            select(ChecklistStageModel).where(
+                ChecklistStageModel.checklist_request_id == cr.id,
+                ChecklistStageModel.status == "ReferBack",
+            ).order_by(ChecklistStageModel.id.desc())
+        )
+        refer_stage = refer_result.scalars().first()
+        if refer_stage:
+            name = await _stage_name(refer_stage)
+            if name:
+                cr.status_format = f"{name} - Referred Back"
+                return
+
         if cr.status == "Pending":
-            # Find the stage that is now Pending to get its name
+            # Find the Pending approval stage, excluding Basic Details (the
+            # request header stays Pending the whole flow and is never the
+            # active approval stage).
             stages_result = await self._session.execute(
                 select(ChecklistStageModel).where(
                     ChecklistStageModel.checklist_request_id == cr.id,
                     ChecklistStageModel.status == "Pending",
                 ).order_by(ChecklistStageModel.id.desc())
             )
-            pending_stage = stages_result.scalars().first()
-            if pending_stage and pending_stage.format_stage_mapping_id:
-                fsm_result = await self._session.execute(
-                    select(FormatStageMappingModel).where(
-                        FormatStageMappingModel.id == pending_stage.format_stage_mapping_id
-                    )
-                )
-                fsm = fsm_result.scalar_one_or_none()
-                if fsm:
-                    sm_result = await self._session.execute(
-                        select(StageModel).where(StageModel.id == fsm.stage_id)
-                    )
-                    sm = sm_result.scalar_one_or_none()
-                    if sm:
-                        cr.status_format = f"{sm.stage_name} - Approval Pending"
-                        return
+            for pending_stage in stages_result.scalars().all():
+                name = await _stage_name(pending_stage)
+                if name and name != "Basic Details":
+                    cr.status_format = f"{name} - Approval Pending"
+                    return
         cr.status_format = ""
 
     # ─────────────────────────────────────────────────────────────────────────

@@ -142,7 +142,8 @@ _PERMISSION_TABLE = [
     ("test_masters.update", "API", "test_masters", "UPDATE", "Update Test Master"),
     ("test_masters.delete", "API", "test_masters", "DELETE", "Delete Test Master"),
     # ─── QC Checklist ───
-    ("menu.qc_checklist",              "MENU", "qc_checklist",        "READ",   "Create Request Page"),
+    ("menu.qc_checklist",              "MENU", "qc_checklist",        "READ",   "Create Request Page (initiate new requests)"),
+    ("menu.qc_checklist_fill",         "MENU", "qc_checklist_fill",   "READ",   "Fill/Approve Request Page (open existing request from dashboard)"),
     ("dashboard.read",                 "API", "dashboard",            "READ",   "View Dashboard Data"),
     ("checklist_requests.list",        "API", "checklist_requests",   "READ",   "List Checklist Requests"),
     ("checklist_requests.create",      "API", "checklist_requests",   "CREATE", "Create Checklist Request"),

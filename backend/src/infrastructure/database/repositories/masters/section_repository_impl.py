@@ -38,6 +38,13 @@ class SectionRepositoryImpl(SqlAlchemyRepository[Section, SectionModel], ISectio
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
+    async def list_by_format_stage_mapping(self, format_stage_mapping_id: int) -> list[Section]:
+        stmt = select(SectionModel).where(
+            SectionModel.format_stage_mapping_id == format_stage_mapping_id
+        ).order_by(SectionModel.id)
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
     async def create(self, entity: Section) -> Section:
         model = SectionModel(
             section_name=entity.section_name,

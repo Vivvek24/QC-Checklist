@@ -7,10 +7,17 @@
  * submit/draft flow calls through the component's ref handle.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { QuestionAnswerPreview, TemplateAnswer } from '../models/TemplateTypes';
 
 export type RowErrors = { options?: string; answer?: string; response?: string };
+
+/** Pre-loaded saved answer for a question row (keyed by stage_question_mapping_id). */
+export interface SavedAnswer {
+  textbox_value: string;
+  question_option_id: number | null;
+  response_answer: string;
+}
 
 export interface UseTemplateAnswersOptions {
   questions: QuestionAnswerPreview[];
@@ -18,6 +25,8 @@ export interface UseTemplateAnswersOptions {
   hasAnswerColumn: boolean;
   hasResponseColumn: boolean;
   isBasicDetails: boolean;
+  /** Pre-loaded saved answers keyed by stage_question_mapping_id (for read-only view). */
+  savedAnswers?: Record<number, SavedAnswer>;
 }
 
 export interface UseTemplateAnswersResult {
@@ -41,12 +50,41 @@ export const useTemplateAnswers = ({
   hasAnswerColumn,
   hasResponseColumn,
   isBasicDetails,
+  savedAnswers,
 }: UseTemplateAnswersOptions): UseTemplateAnswersResult => {
   const [selections, setSelections] = useState<Record<number, unknown>>({});
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [responses, setResponses] = useState<Record<number, string>>({});
   const [helpers, setHelpers] = useState<Record<number, string[]>>({});
   const [errors, setErrors] = useState<Record<number, RowErrors>>({});
+
+  // Seed state from pre-loaded saved answers (resuming / viewing a submitted
+  // stage). Runs when the saved answers arrive so already-filled stages render
+  // their persisted values.
+  useEffect(() => {
+    if (!savedAnswers) return;
+    // Multi-select questions hold their value as an array, not a scalar —
+    // PrimeReact's MultiSelect calls .slice() on it and crashes otherwise.
+    const answerTypeByKey = new Map<number, string>(
+      questions.map((q) => [q.stage_question_mapping_id, q.answer_type])
+    );
+    const nextSelections: Record<number, unknown> = {};
+    const nextAnswers: Record<number, string> = {};
+    const nextResponses: Record<number, string> = {};
+    for (const [k, sa] of Object.entries(savedAnswers)) {
+      const key = Number(k);
+      if (sa.question_option_id != null) {
+        const isMulti = answerTypeByKey.get(key) === 'Dropdown (multi select)';
+        nextSelections[key] = isMulti ? [sa.question_option_id] : sa.question_option_id;
+      }
+      if (sa.textbox_value) nextAnswers[key] = sa.textbox_value;
+      if (sa.response_answer) nextResponses[key] = sa.response_answer;
+    }
+    setSelections(nextSelections);
+    setAnswers(nextAnswers);
+    setResponses(nextResponses);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedAnswers]);
 
   const clearError = (key: number, field: keyof RowErrors) =>
     setErrors((prev) => {
@@ -113,11 +151,16 @@ export const useTemplateAnswers = ({
   const getAnswers = (): TemplateAnswer[] =>
     questions.map((row) => {
       const key = row.stage_question_mapping_id;
+      // Single-select → a number; multi-select → an array of numbers.
+      const sel = selections[key];
+      const optionId: number | null =
+        typeof sel === 'number' ? sel :
+        Array.isArray(sel) && sel.length > 0 ? sel[0] : null;
       return {
         stage_question_mapping_id: key,
         question_id: row.question_id,
         textbox_value: answers[key] || '',
-        question_option_id: typeof selections[key] === 'number' ? (selections[key] as number) : null,
+        question_option_id: optionId,
         response_answer: responses[key] || '',
         helpers: helpers[key] || [],
       };

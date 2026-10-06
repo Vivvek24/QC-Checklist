@@ -11,6 +11,9 @@ from src.api.v1.endpoints.employee_import_controller import router as employee_i
 from src.api.v1.endpoints.health_controller import router as health_router
 from src.api.v1.endpoints.masters.approval_label_controller import router as approval_label_master_router
 from src.api.v1.endpoints.masters.business_unit_controller import router as business_unit_router
+from src.api.v1.endpoints.masters.checklist_preview_controller import (
+    router as checklist_preview_router,
+)
 from src.api.v1.endpoints.masters.format_controller import router as format_router
 from src.api.v1.endpoints.masters.format_stage_mapping_controller import router as format_stage_mapping_router
 from src.api.v1.endpoints.masters.product_controller import router as product_router
@@ -29,7 +32,6 @@ from src.api.v1.endpoints.masters.validation_type_controller import router as va
 from src.api.v1.endpoints.qc_checklist.checklist_request_controller import router as checklist_request_router
 from src.api.v1.endpoints.qc_checklist.checklist_stage_controller import router as checklist_stage_router
 from src.api.v1.endpoints.qc_checklist.checklist_stage_section_controller import router as checklist_stage_section_router
-from src.api.v1.endpoints.qc_checklist.initialize_checklist_controller import router as initialize_checklist_router
 from src.api.v1.endpoints.qc_checklist.dashboard_controller import router as dashboard_router
 from src.api.v1.endpoints.qc_checklist.validate_checklist_controller import router as validate_checklist_router
 from src.api.v1.endpoints.qc_checklist.submit_stage_controller import router as submit_stage_router
@@ -70,9 +72,9 @@ api_v1_router.include_router(sap_field_router)
 api_v1_router.include_router(section_router)
 api_v1_router.include_router(template_router)
 api_v1_router.include_router(template_stage_save_router)
+api_v1_router.include_router(checklist_preview_router)
 
 # ─── QC Checklist ───
-api_v1_router.include_router(initialize_checklist_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(validate_checklist_router)
 api_v1_router.include_router(submit_stage_router)

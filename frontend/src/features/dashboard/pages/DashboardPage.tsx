@@ -4,6 +4,7 @@
  */
 
 import { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from 'primereact/button';
 import { Calendar } from 'primereact/calendar';
 import { TabView, TabPanel } from 'primereact/tabview';
@@ -46,6 +47,7 @@ function formatDate(d: Date): string {
 
 export const DashboardPage = () => {
   const toast = useRef<Toast>(null);
+  const navigate = useNavigate();
   const { from: defaultFrom, to: defaultTo } = getMonthRange();
 
   const [fromDate, setFromDate] = useState<Date>(defaultFrom);
@@ -81,11 +83,38 @@ export const DashboardPage = () => {
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
+  // Stage Status as "Stage Name : Status". The request's status_format carries
+  // the active stage ("<Stage> - Approval Pending"); reformat it to the
+  // requested shape, falling back to the overall request status when it's blank
+  // (fully approved / referred back).
+  const stageStatusBodyTemplate = (row: DashboardRow) => {
+    const sf = (row.status_format || '').trim();
+    let text: string;
+    if (sf) {
+      const parts = sf.split(' - ');
+      const stageName = (parts[0] ?? '').trim();
+      const state = parts.slice(1).join(' - ').trim();
+      const label = state.toLowerCase().includes('pending') ? 'Pending Approval' : state || row.request_status;
+      text = `${stageName} : ${label}`;
+    } else {
+      // No active stage (fully approved or referred back) — show request status.
+      const map: Record<string, string> = {
+        Approved: 'Approved',
+        ReferBack: 'Referred Back',
+        Pending: 'Pending',
+        Draft: 'Draft',
+      };
+      text = map[row.request_status] ?? row.request_status;
+    }
+    return <span style={{ fontWeight: 600, color: '#334155' }}>{text}</span>;
+  };
+
   const actionBodyTemplate = (row: DashboardRow) => (
     <div className="flex align-items-center gap-1">
       {row.action_flag && (
         <Button icon="pi pi-arrow-right" rounded text raised severity="success" size="small"
-          tooltip="Fill Next Stage" tooltipOptions={{ position: 'top' }} />
+          tooltip="Fill Next Stage" tooltipOptions={{ position: 'top' }}
+          onClick={() => navigate(`/qc-checklist/create-request?request=${encodeURIComponent(row.request_number)}`)} />
       )}
       <Button icon="pi pi-trash" rounded text raised severity="danger" size="small"
         tooltip="Delete" tooltipOptions={{ position: 'top' }} />
@@ -97,7 +126,7 @@ export const DashboardPage = () => {
     { field: 'batch_no', header: 'Batch No', style: { width: '8rem' } },
     { field: 'product_name', header: 'Product', style: { minWidth: '10rem' } },
     { field: 'test_name', header: 'Test Name', style: { minWidth: '8rem' } },
-    { field: 'stage_status', header: 'Stage Status', style: { width: '7rem' } },
+    { field: 'stage_status', header: 'Stage Status', style: { minWidth: '14rem' } },
     { field: 'request_status', header: 'Request Status', style: { width: '7rem' } },
     { field: 'requested_by', header: 'Requested By', style: { width: '8rem' } },
     { field: 'format_name', header: 'Format', style: { minWidth: '12rem' } },
@@ -141,6 +170,7 @@ export const DashboardPage = () => {
               <Column header="Actions" body={actionBodyTemplate} style={{ width: '6rem' }} />
               {columns.filter(c => c.field !== 'request_number').map((col) => (
                 <Column key={col.field} field={col.field} header={col.header} style={col.style}
+                  body={col.field === 'stage_status' ? stageStatusBodyTemplate : undefined}
                   sortable />
               ))}
               <Column header="Date" body={dateBodyTemplate} style={{ width: '7rem' }} sortable
@@ -153,6 +183,7 @@ export const DashboardPage = () => {
               scrollable scrollHeight="calc(100vh - 320px)">
               {columns.map((col) => (
                 <Column key={col.field} field={col.field} header={col.header} style={col.style}
+                  body={col.field === 'stage_status' ? stageStatusBodyTemplate : undefined}
                   sortable />
               ))}
               <Column header="Date" body={dateBodyTemplate} style={{ width: '7rem' }} sortable

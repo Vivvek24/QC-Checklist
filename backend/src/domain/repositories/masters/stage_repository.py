@@ -12,3 +12,8 @@ class IStageRepository(IRepository[Stage]):
     async def exists_by_name(self, stage_name: str, exclude_id: int | None = None) -> bool:
         """Check whether a stage name is already taken."""
         ...
+
+    @abstractmethod
+    async def list_by_ids(self, stage_ids: list[int]) -> list[Stage]:
+        """Bulk-load stages by id. Returns only the ones that exist."""
+        ...

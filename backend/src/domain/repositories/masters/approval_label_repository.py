@@ -10,3 +10,8 @@ class IApprovalLabelRepository(IRepository[ApprovalLabel]):
     async def exists_by_label_for_stage(self, label: str, stage_id: int, exclude_id: int | None = None) -> bool:
         """Check whether a label already exists for a given stage."""
         ...
+
+    @abstractmethod
+    async def list_active_by_stage(self, stage_id: int) -> list[ApprovalLabel]:
+        """Return all active approval labels for a given stage, in id order."""
+        ...

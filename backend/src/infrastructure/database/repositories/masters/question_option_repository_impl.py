@@ -35,6 +35,16 @@ class QuestionOptionRepositoryImpl(SqlAlchemyRepository[QuestionOption, Question
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
+    async def list_by_questions(self, question_ids: list[int]) -> list[QuestionOption]:
+        if not question_ids:
+            return []
+        stmt = select(QuestionOptionModel).where(
+            QuestionOptionModel.question_id.in_(question_ids),
+            QuestionOptionModel.is_active.is_(True),
+        ).order_by(QuestionOptionModel.id)
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
     async def exists_by_code(self, code: str, exclude_id: int | None = None) -> bool:
         return await self.exists_by_title_for_question(code, 0, exclude_id)
 

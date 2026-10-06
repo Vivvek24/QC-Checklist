@@ -9,6 +9,7 @@ from src.application.services.qc_checklist.submit_stage_service import (
     SubmitStageService,
     SubmitStageRequest,
     QuestionAnswerPayload,
+    ExtraStagePayload,
 )
 from src.domain.entities.user import User
 from src.domain.exceptions.domain_exceptions import EntityNotFoundError
@@ -32,6 +33,13 @@ class AnswerSchema(BaseModel):
     helpers: list[str] | None = None
 
 
+class ExtraStageSchema(BaseModel):
+    """A secondary stage (e.g. Basic Details) submitted with the primary one."""
+    format_stage_mapping_id: int
+    checklist_stage_id: int | None = None
+    answers: list[AnswerSchema] = []
+
+
 class SubmitStageRequestSchema(BaseModel):
     checklist_request_id: int | None = None
     format_id: int
@@ -41,6 +49,9 @@ class SubmitStageRequestSchema(BaseModel):
     remark_id: int | None = None
     remark_text: str = ""
     answers: list[AnswerSchema] = []
+    # Secondary stages persisted + advanced to Pending together with the
+    # primary stage on first submit (used for Basic Details).
+    extra_stages: list[ExtraStageSchema] = []
 
 
 class SubmitStageResponseSchema(BaseModel):
@@ -77,15 +88,8 @@ async def submit_stage(
 
     service = SubmitStageService(session)
 
-    request = SubmitStageRequest(
-        checklist_request_id=body.checklist_request_id,
-        format_id=body.format_id,
-        checklist_stage_id=body.checklist_stage_id,
-        format_stage_mapping_id=body.format_stage_mapping_id,
-        action=body.action,
-        remark_id=body.remark_id,
-        remark_text=body.remark_text,
-        answers=[
+    def to_payloads(answers: list[AnswerSchema]) -> list[QuestionAnswerPayload]:
+        return [
             QuestionAnswerPayload(
                 stage_question_mapping_id=a.stage_question_mapping_id,
                 question_id=a.question_id,
@@ -97,8 +101,26 @@ async def submit_stage(
                 date_time=a.date_time,
                 helpers=a.helpers,
             )
-            for a in body.answers
-        ] if body.answers else None,
+            for a in answers
+        ]
+
+    request = SubmitStageRequest(
+        checklist_request_id=body.checklist_request_id,
+        format_id=body.format_id,
+        checklist_stage_id=body.checklist_stage_id,
+        format_stage_mapping_id=body.format_stage_mapping_id,
+        action=body.action,
+        remark_id=body.remark_id,
+        remark_text=body.remark_text,
+        answers=to_payloads(body.answers) if body.answers else None,
+        extra_stages=[
+            ExtraStagePayload(
+                format_stage_mapping_id=es.format_stage_mapping_id,
+                checklist_stage_id=es.checklist_stage_id,
+                answers=to_payloads(es.answers) if es.answers else None,
+            )
+            for es in body.extra_stages
+        ] if body.extra_stages else None,
     )
 
     try:

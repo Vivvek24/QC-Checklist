@@ -38,6 +38,13 @@ class StageRepositoryImpl(SqlAlchemyRepository[Stage, StageModel], IStageReposit
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
 
+    async def list_by_ids(self, stage_ids: list[int]) -> list[Stage]:
+        if not stage_ids:
+            return []
+        stmt = select(StageModel).where(StageModel.id.in_(stage_ids))
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
     async def create(self, entity: Stage) -> Stage:
         model = StageModel(stage_name=entity.stage_name, is_active=entity.is_active, created_by=entity.created_by, modified_by=entity.modified_by)
         self._session.add(model)

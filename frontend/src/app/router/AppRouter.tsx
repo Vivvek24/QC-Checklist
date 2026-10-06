@@ -53,7 +53,7 @@ export const AppRouter = () => {
             <Route
               path="qc-checklist/create-request"
               element={
-                <PrivateRoute menuKey="qc_checklist">
+                <PrivateRoute menuKeyAnyOf={['qc_checklist', 'qc_checklist_fill']}>
                   <CreateRequestPage />
                 </PrivateRoute>
               }

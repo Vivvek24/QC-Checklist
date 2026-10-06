@@ -10,7 +10,7 @@ export { useChecklistPreview } from './hooks/useChecklistPreview';
 export { useDragReorder, moveItem } from './hooks/useDragReorder';
 export type { UseDragReorderOptions, UseDragReorderResult } from './hooks/useDragReorder';
 export { useTemplateConfigData } from './hooks/useTemplateConfigData';
-export type { RawMapping, UseTemplateConfigDataResult } from './hooks/useTemplateConfigData';
+export type { UseTemplateConfigDataResult } from './hooks/useTemplateConfigData';
 export { useQuestionChoices } from './hooks/useQuestionChoices';
 export type { QuestionMasterRow } from './hooks/useQuestionChoices';
 export { useTemplateSave } from './hooks/useTemplateSave';

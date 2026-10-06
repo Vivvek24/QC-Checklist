@@ -33,10 +33,21 @@ export interface ApprovalLabelPreview {
   label: string;
 }
 
+/** A single Template Studio column, as read for rendering (not editing). */
+export interface ColumnPreview {
+  id: number;
+  header: string;
+  column_type: string;
+  display_order: number;
+  width: string | null;
+  is_required: boolean;
+}
+
 export interface SectionPreview {
   section_id: number;
   section_name: string;
   questions: QuestionAnswerPreview[];
+  columns: ColumnPreview[];
 }
 
 export interface ChecklistStagePreview {
@@ -49,6 +60,7 @@ export interface ChecklistStagePreview {
   questions: QuestionAnswerPreview[];
   sections: SectionPreview[];
   approval_labels: ApprovalLabelPreview[];
+  columns: ColumnPreview[];
 }
 
 export interface ChecklistPreview {

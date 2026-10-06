@@ -7,16 +7,18 @@
 import { InputText } from 'primereact/inputtext';
 import { RadioButton } from 'primereact/radiobutton';
 import { OptionSelector } from './OptionSelector';
-import type { TemplateColumnResponse } from '@features/template-studio';
+import type { ColumnPreview } from '../models/ChecklistPreview';
 import type { QuestionAnswerPreview } from '../models/TemplateTypes';
 import type { RowErrors } from '../hooks/useTemplateAnswers';
 
-type ColumnLike = Pick<TemplateColumnResponse, 'column_type'>;
+type ColumnLike = Pick<ColumnPreview, 'column_type'>;
 
 interface Props {
   column: ColumnLike;
   row: QuestionAnswerPreview;
   canAdd: boolean;
+  /** True when the stage is read-only (Pending/Approved) — disables all inputs. */
+  disabled?: boolean;
   rowErr?: RowErrors;
   selection: unknown;
   onSelectionChange: (value: unknown) => void;
@@ -34,6 +36,7 @@ export const TemplateCell = ({
   column,
   row,
   canAdd,
+  disabled = false,
   rowErr,
   selection,
   onSelectionChange,
@@ -63,6 +66,7 @@ export const TemplateCell = ({
             options={row.options}
             value={selection}
             onChange={onSelectionChange}
+            disabled={disabled}
           />
           {rowErr?.options && <small className="qc-validation-error">{rowErr.options}</small>}
         </>
@@ -82,6 +86,7 @@ export const TemplateCell = ({
                   value={v}
                   checked={response === v}
                   onChange={() => onResponseChange(v)}
+                  disabled={disabled}
                 />
                 <label style={{ fontSize: '0.72rem' }}>{v}</label>
               </div>
@@ -101,6 +106,7 @@ export const TemplateCell = ({
             value={answer}
             className={rowErr?.answer ? 'w-full p-invalid' : 'w-full'}
             onChange={(e) => onAnswerChange(e.target.value)}
+            disabled={disabled}
             style={{ height: '1.85rem', fontSize: '0.75rem' }}
           />
           {rowErr?.answer && <small className="qc-validation-error">{rowErr.answer}</small>}
@@ -110,8 +116,10 @@ export const TemplateCell = ({
                 value={val}
                 className="flex-1"
                 onChange={(e) => onHelperChange(idx, e.target.value)}
+                disabled={disabled}
                 style={{ height: '1.85rem', fontSize: '0.75rem' }}
               />
+              {!disabled && (
               <button
                 type="button"
                 onClick={() => onHelperRemove(idx)}
@@ -122,9 +130,10 @@ export const TemplateCell = ({
               >
                 <i className="pi pi-times" style={{ fontSize: '0.7rem' }} />
               </button>
+              )}
             </div>
           ))}
-          {row.has_multiple_text_box && canAdd && (
+          {row.has_multiple_text_box && canAdd && !disabled && (
             <button
               type="button"
               onClick={onHelperAdd}

@@ -17,9 +17,15 @@ interface PrivateRouteProps {
    * hides only that screen.
    */
   menuKey?: string | string[];
+  /**
+   * Menu keys where *any one* grants access. Use for a page reachable through
+   * more than one entitlement — e.g. the request page, which an initiator
+   * reaches via `qc_checklist` and an approver via `qc_checklist_fill`.
+   */
+  menuKeyAnyOf?: string[];
 }
 
-export const PrivateRoute = ({ children, menuKey }: PrivateRouteProps) => {
+export const PrivateRoute = ({ children, menuKey, menuKeyAnyOf }: PrivateRouteProps) => {
   const { isAuthenticated, isBootstrapping } = useAppSelector((state) => state.auth);
   const { menuKeys, isLoaded: rbacLoaded, isLoading: rbacLoading } = useAppSelector((state) => state.rbac);
   const location = useLocation();
@@ -37,12 +43,14 @@ export const PrivateRoute = ({ children, menuKey }: PrivateRouteProps) => {
   // If menu key(s) are specified, wait until RBAC has finished loading
   // before making an access decision — prevents a flash-redirect to /unauthorized
   // while permissions are still being fetched after login.
-  if (menuKey) {
+  if (menuKey || menuKeyAnyOf) {
     if (!rbacLoaded || rbacLoading) {
       return null;
     }
-    const required = Array.isArray(menuKey) ? menuKey : [menuKey];
-    if (!required.every((key) => menuKeys.includes(key))) {
+    const required = menuKey ? (Array.isArray(menuKey) ? menuKey : [menuKey]) : [];
+    const hasAllRequired = required.every((key) => menuKeys.includes(key));
+    const hasAnyOf = !menuKeyAnyOf || menuKeyAnyOf.some((key) => menuKeys.includes(key));
+    if (!hasAllRequired || !hasAnyOf) {
       return <Navigate to="/unauthorized" replace />;
     }
   }

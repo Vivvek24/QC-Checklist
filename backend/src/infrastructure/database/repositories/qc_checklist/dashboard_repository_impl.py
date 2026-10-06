@@ -190,7 +190,7 @@ ORDER BY x.created_date DESC
     async def get_stage_approval_label_mappings(self, stage_id: int) -> list[tuple]:
         """Get all StageApprovalLabelMappings for a stage, ordered by id."""
         result = await self._session.execute(text("""
-            SELECT salm.id, salm.approval_label_id, salm.user_id, salm.date_of_action
+            SELECT salm.id, salm.approval_label_id, salm.user_id, salm.date_of_action, salm.is_refer_back
             FROM stage_approval_label_mappings salm
             WHERE salm.checklist_stage_id = :sid
             ORDER BY salm.id

@@ -114,6 +114,13 @@ class DashboardService:
             approval_label_id = mapping[1]
             mapping_user_id = mapping[2]
             date_of_action = mapping[3]
+            mapping_is_refer_back = mapping[4] if len(mapping) > 4 else False
+
+            # A referred-back stage goes back to the FILLER, not the approver who
+            # referred it. The approver's own refer-back mapping must not grant
+            # them the button — skip it so only the filling label's role matches.
+            if stage_status == "ReferBack" and mapping_is_refer_back:
+                continue
 
             # Determine booltype
             if stage_status == "ReferBack":

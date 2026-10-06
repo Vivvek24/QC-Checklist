@@ -8,10 +8,9 @@
  * per configured column, in display_order, rendered according to its
  * column_type (SERIAL / QUESTION / OPTION / ANSWER / RESPONSE / AQL_LIMIT).
  *
- * If a stage has no columns configured yet in Template Studio, it falls back
- * to a fixed default layout (Sr No, Question, Select Options, Enter Answer,
- * and Response when not Basic Details) so the page still works before
- * someone has designed that stage's layout. See useResolvedColumns.
+ * If a stage has no columns configured in Template Studio, nothing is
+ * rendered — a "not configured" message is shown instead of a fallback
+ * grid. See useResolvedColumns.
  *
  * Exposes validate()/getAnswers() via ref — the same contract the old
  * per-format Snip components used — so CreateRequestPage's submit/draft flow
@@ -20,9 +19,10 @@
  */
 
 import { forwardRef, useImperativeHandle } from 'react';
-import type { TemplateColumnResponse } from '@features/template-studio';
 import { BASIC_DETAILS_STAGE } from '../../masters/constants';
+import type { ColumnPreview } from '../models/ChecklistPreview';
 import type { QuestionAnswerPreview, TemplateDrivenSnipHandle } from '../models/TemplateTypes';
+import type { SavedAnswer } from '../hooks/useTemplateAnswers';
 import { useResolvedColumns } from '../hooks/useResolvedColumns';
 import { useTemplateAnswers } from '../hooks/useTemplateAnswers';
 import { TemplateCell } from './TemplateCell';
@@ -31,14 +31,18 @@ export type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
 
 interface Props {
   questions: QuestionAnswerPreview[];
-  columns: TemplateColumnResponse[];
+  columns: ColumnPreview[];
   stageName: string;
   stageStatus: string;
+  /** Pre-loaded saved answers keyed by stage_question_mapping_id (for read-only view). */
+  savedAnswers?: Record<number, SavedAnswer>;
 }
 
 export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
-  ({ questions, columns, stageName, stageStatus }, ref) => {
+  ({ questions, columns, stageName, stageStatus, savedAnswers }, ref) => {
     const isBasicDetails = stageName === BASIC_DETAILS_STAGE;
+    // Editable only while the stage is still fillable; once submitted
+    // (Pending) or approved it's view-only until the approver acts.
     const canAdd = stageStatus === 'Initial' || stageStatus === 'Draft' || stageStatus === 'ReferBack';
 
     const { orderedColumns, hasOptionColumn, hasAnswerColumn, hasResponseColumn } = useResolvedColumns(
@@ -53,12 +57,20 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
       helpers, setHelpers,
       errors, clearError,
       validate, getAnswers,
-    } = useTemplateAnswers({ questions, hasOptionColumn, hasAnswerColumn, hasResponseColumn, isBasicDetails });
+    } = useTemplateAnswers({ questions, hasOptionColumn, hasAnswerColumn, hasResponseColumn, isBasicDetails, savedAnswers });
 
     useImperativeHandle(ref, () => ({ validate, getAnswers }));
 
     if (questions.length === 0) {
       return <div style={{ padding: '1rem', color: '#94a3b8', fontSize: '0.78rem' }}>No questions for this stage.</div>;
+    }
+
+    if (orderedColumns.length === 0) {
+      return (
+        <div style={{ padding: '1rem', color: '#94a3b8', fontSize: '0.78rem' }}>
+          No column layout configured for this stage in Template Studio.
+        </div>
+      );
     }
 
     return (
@@ -99,6 +111,7 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
                         column={c}
                         row={row}
                         canAdd={canAdd}
+                        disabled={!canAdd}
                         rowErr={errors[key]}
                         selection={selections[key]}
                         onSelectionChange={(val) => {

@@ -1,5 +1,6 @@
 """Validate Checklist Request — service that validates all question answers before submit."""
 
+import logging
 import re
 from dataclasses import dataclass, field
 
@@ -20,6 +21,8 @@ from src.infrastructure.database.models.masters.stage_model import StageModel
 from src.infrastructure.database.models.masters.stage_question_mapping_model import StageQuestionMappingModel
 from src.infrastructure.database.models.masters.validation_type_model import ValidationTypeModel
 
+
+logger = logging.getLogger(__name__)
 
 ACTIVE_STATUSES = ("Draft", "ReferBack", "Initial", "Pending", "Saved")
 BATCH_NO_REGEX = re.compile(r"^\S+$")
@@ -433,8 +436,13 @@ SELECT EXISTS (
                 result.add_error(stage_id, stage_name, qa.question_id, question.title,
                                  "Duplicate Batch No + Test Name combination already exists in another request!")
         except Exception:
-            # If SQL fails, don't block — log but continue
-            pass
+            # Don't fabricate a validation error if the duplicate-check query
+            # itself fails — but surface it loudly so a broken query/schema is
+            # noticed rather than silently skipping the check.
+            logger.exception(
+                "Batch/Test duplicate-check query failed for request %s stage %s",
+                checklist_request_id, stage_id,
+            )
 
     async def _get_question_by_validation_type(self, validation_type_name: str) -> QuestionModel | None:
         """Get question linked to a specific validation type."""

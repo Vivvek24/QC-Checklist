@@ -41,6 +41,13 @@ class QuestionRepositoryImpl(SqlAlchemyRepository[Question, QuestionModel], IQue
         if exclude_id: stmt = stmt.where(QuestionModel.id != exclude_id)
         return (await self._session.execute(stmt)).scalar_one_or_none() is not None
 
+    async def list_by_ids(self, question_ids: list[int]) -> list[Question]:
+        if not question_ids:
+            return []
+        stmt = select(QuestionModel).where(QuestionModel.id.in_(question_ids))
+        models = list((await self._session.execute(stmt)).scalars().all())
+        return await self._hydrate(models)
+
     async def create(self, entity: Question) -> Question:
         m = QuestionModel(
             title=entity.title, answer_type=entity.answer_type.value,
