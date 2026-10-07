@@ -39,8 +39,8 @@ class DashboardService:
         to_date: date | None,
         role_id: int | None,
         is_admin: bool,
-    ) -> dict[str, list[DashboardRow]]:
-        """Returns { pending: [...], approved: [...] }."""
+    ) -> dict:
+        """Returns { pending: [...], approved: [...], total: int }."""
         pending_rows = await self._repo.fetch_dashboard_rows(
             is_last_stage=False, pending_statuses=True,
             from_date=from_date, to_date=to_date,
@@ -60,7 +60,12 @@ class DashboardService:
             for dr in pending:
                 dr.action_flag = await self._control_button_visibility(dr.request_number, role_id)
 
-        return {"pending": pending, "approved": approved}
+        total = await self._repo.count_requests_in_range(
+            from_date=from_date, to_date=to_date,
+            role_id=role_id, is_admin=is_admin,
+        )
+
+        return {"pending": pending, "approved": approved, "total": total}
 
     def _to_dashboard_row(self, row: DashboardQueryRow) -> DashboardRow:
         return DashboardRow(

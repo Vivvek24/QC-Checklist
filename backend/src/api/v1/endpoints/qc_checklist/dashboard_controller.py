@@ -34,6 +34,7 @@ class DashboardRowSchema(BaseModel):
 class DashboardResponse(BaseModel):
     pending: list[DashboardRowSchema]
     approved: list[DashboardRowSchema]
+    total: int = 0
 
 
 @router.get("/dashboard", response_model=DashboardResponse,
@@ -95,6 +96,7 @@ async def get_dashboard(
     return DashboardResponse(
         pending=[serialize(r) for r in data["pending"]],
         approved=[serialize(r) for r in data["approved"]],
+        total=data.get("total", 0),
     )
 
 

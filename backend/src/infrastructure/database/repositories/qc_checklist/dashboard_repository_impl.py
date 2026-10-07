@@ -160,6 +160,51 @@ ORDER BY x.created_date DESC
             for row in rows
         ]
 
+    async def count_requests_in_range(
+        self,
+        from_date: date | None,
+        to_date: date | None,
+        role_id: int | None,
+        is_admin: bool,
+    ) -> int:
+        """Count distinct non-removed checklist requests in the date range.
+
+        Independent of is_last_stage / status — this is the exact total of
+        requests that fall within the selected range (same role scoping as the
+        dashboard rows so the total matches what the user can see)."""
+
+        sql = """
+SELECT COUNT(DISTINCT cr.id) AS total
+FROM checklist_requests cr
+WHERE cr.is_removed = false
+"""
+        params: dict = {}
+
+        if from_date:
+            sql += "    AND cr.created_date >= :from_date\n"
+            params["from_date"] = from_date
+
+        if to_date:
+            sql += "    AND cr.created_date < :to_date\n"
+            params["to_date"] = to_date
+
+        if not is_admin and role_id:
+            sql += """    AND EXISTS (
+        SELECT 1
+        FROM checklist_stages cs2
+        JOIN format_stage_mappings fsm2 ON fsm2.id = cs2.format_stage_mapping_id
+        JOIN stages s2 ON s2.id = fsm2.stage_id
+        JOIN approval_labels al ON al.stage_id = s2.id AND al.is_active = true
+        JOIN approval_label_user_roles alur ON alur.approval_label_id = al.id
+        WHERE cs2.checklist_request_id = cr.id
+            AND alur.role_id = :role_id
+    )
+"""
+            params["role_id"] = role_id
+
+        result = await self._session.execute(text(sql), params)
+        return result.scalar() or 0
+
     async def get_request_by_number(self, request_number: str) -> tuple | None:
         """Get checklist request id and format_id by request_number."""
         result = await self._session.execute(text(

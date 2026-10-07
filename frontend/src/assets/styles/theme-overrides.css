@@ -1343,3 +1343,47 @@ h2 {
     width: 3.2rem;
   }
 }
+
+/* ─── Dashboard KPI Cards ─────────────────────────────────────────────── */
+/* NOTE: class names deliberately avoid the "pi-" substring. The global rule
+   [class*="pi-"] { font-family: 'primeicons' !important } would otherwise match
+   kpi-* classes and force the icon font onto the card text. */
+.kcard {
+  position: relative; overflow: visible; background: #ffffff; border: none;
+  border-radius: 12px; padding: 30px 18px 16px; margin-top: 14px; cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.08), 0 6px 18px rgba(0,0,0,0.05);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.kcard:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.04); }
+.kcard.kcard-active { background: #fafafa; box-shadow: 0 4px 16px rgba(0,0,0,0.09), 0 2px 6px rgba(0,0,0,0.04); }
+.kcard-left { display: flex; flex-direction: column; gap: 2px; padding-left: 8px; }
+.kcard-icon {
+  position: absolute; top: -12px; left: 24px; width: 28px; height: 28px; min-width: 28px;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.kcard-icon i { font-size: 1.05rem; color: #ffffff; }
+.kcard-icon.kcard-icon-pending { background: #f59e0b; }
+.kcard-icon.kcard-icon-approved { background: #10b981; }
+.kcard-icon.kcard-icon-rejected { background: #ef4444; }
+.kcard-icon.kcard-icon-referred { background: #8b5cf6; }
+.kcard-icon.kcard-icon-total { background: #ed1c24; }
+.kcard-label { color: #374151; font-weight: 600; }
+.kcard-count { font-size: 1.6rem; font-weight: 700; color: #111827; line-height: 1; }
+
+/* ─── Dashboard table ─────────────────────────────────────────────────── */
+/* Header: distinct background from rows + never wrap the header text so
+   columns size to fit their title on a single line. */
+.qc-dashboard .p-datatable .p-datatable-thead > tr > th {
+  background: #eef2f7;
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Frozen columns (Request No / Actions) need an opaque background so scrolled
+   cells don't show through them. Match the row background + header. */
+.qc-dashboard .p-datatable .qc-frozen-col { background: #ffffff; }
+.qc-dashboard .p-datatable .p-datatable-thead > tr > th.qc-frozen-col { background: #eef2f7; z-index: 2; }
+.qc-dashboard .p-datatable .p-row-odd .qc-frozen-col { background: #f8fafc; }
+.qc-dashboard .p-datatable .qc-frozen-col { box-shadow: inset -1px 0 0 #e9ecef; }
