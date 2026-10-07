@@ -1,65 +1,39 @@
-"""Submit Stage — API controller for submitting/saving/approving/referring back a checklist stage."""
+"""Submit Stage — API controller (thin).
+
+Parses HTTP, resolves the caller's role, picks the focused service for the
+requested action (submit / save-draft / approve / refer-back), and maps domain
+errors to HTTP status codes. Request/response ↔ DTO translation lives on the
+schemas. No business rules, ORM access, or commit here — get_db_session commits
+once per request.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.v1.dependencies import get_current_active_user
-from src.application.services.qc_checklist.submit_stage_service import (
-    SubmitStageService,
-    SubmitStageRequest,
-    QuestionAnswerPayload,
-    ExtraStagePayload,
+from src.api.v1.schemas.qc_checklist.submit_stage_schema import (
+    SubmitStageRequestSchema,
+    SubmitStageResponseSchema,
 )
+from src.application.services.qc_checklist.approve_stage_service import ApproveStageService
+from src.application.services.qc_checklist.refer_back_service import ReferBackService
+from src.application.services.qc_checklist.save_draft_service import SaveDraftService
+from src.application.services.qc_checklist.stage_action_base_service import StageActionBase
+from src.application.services.qc_checklist.submit_stage_service import SubmitStageService
 from src.domain.entities.user import User
 from src.domain.exceptions.domain_exceptions import EntityNotFoundError
-from src.infrastructure.database.models.role_model import RoleAssignmentModel
 from src.infrastructure.database.session import get_db_session
 from src.infrastructure.security.permission_manager import require_api_permission
-from sqlalchemy import select
 
 router = APIRouter(prefix="/qc-checklist", tags=["QC Checklist - Submit Stage"])
 
-
-class AnswerSchema(BaseModel):
-    stage_question_mapping_id: int
-    question_id: int
-    textbox_value: str = ""
-    question_option_id: int | None = None
-    response_question_option_id: int | None = None
-    response_answer: str = ""
-    product_id: int | None = None
-    date_time: str | None = None
-    helpers: list[str] | None = None
-
-
-class ExtraStageSchema(BaseModel):
-    """A secondary stage (e.g. Basic Details) submitted with the primary one."""
-    format_stage_mapping_id: int
-    checklist_stage_id: int | None = None
-    answers: list[AnswerSchema] = []
-
-
-class SubmitStageRequestSchema(BaseModel):
-    checklist_request_id: int | None = None
-    format_id: int
-    checklist_stage_id: int | None = None
-    format_stage_mapping_id: int
-    action: str  # submit, save_draft, approve, refer_back
-    remark_id: int | None = None
-    remark_text: str = ""
-    answers: list[AnswerSchema] = []
-    # Secondary stages persisted + advanced to Pending together with the
-    # primary stage on first submit (used for Basic Details).
-    extra_stages: list[ExtraStageSchema] = []
-
-
-class SubmitStageResponseSchema(BaseModel):
-    success: bool
-    checklist_request_id: int
-    checklist_stage_id: int
-    new_status: str
-    message: str
+# Each action has its own focused service.
+_SERVICE_BY_ACTION: dict[str, type[StageActionBase]] = {
+    "save_draft": SaveDraftService,
+    "submit": SubmitStageService,
+    "approve": ApproveStageService,
+    "refer_back": ReferBackService,
+}
 
 
 @router.post("/submit-stage", response_model=SubmitStageResponseSchema,
@@ -74,68 +48,20 @@ async def submit_stage(
     Handles all stage lifecycle actions:
     - save_draft: Save answers without submitting
     - submit: Submit the stage for approval
-    - approve: Approve the stage (opens next stage)
+    - approve: Approve the stage (opens next stage, or finalizes the request)
     - refer_back: Send the stage back to the filling analyst
     """
-    # Get user's role
-    ra_result = await session.execute(
-        select(RoleAssignmentModel.role_id).where(
-            RoleAssignmentModel.user_id == current_user.id,
-            RoleAssignmentModel.is_active.is_(True),
-        ).limit(1)
-    )
-    role_id = ra_result.scalar_one_or_none()
+    service_cls = _SERVICE_BY_ACTION.get(body.action)
+    if service_cls is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Invalid action: {body.action}")
 
-    service = SubmitStageService(session)
-
-    def to_payloads(answers: list[AnswerSchema]) -> list[QuestionAnswerPayload]:
-        return [
-            QuestionAnswerPayload(
-                stage_question_mapping_id=a.stage_question_mapping_id,
-                question_id=a.question_id,
-                textbox_value=a.textbox_value,
-                question_option_id=a.question_option_id,
-                response_question_option_id=a.response_question_option_id,
-                response_answer=a.response_answer,
-                product_id=a.product_id,
-                date_time=a.date_time,
-                helpers=a.helpers,
-            )
-            for a in answers
-        ]
-
-    request = SubmitStageRequest(
-        checklist_request_id=body.checklist_request_id,
-        format_id=body.format_id,
-        checklist_stage_id=body.checklist_stage_id,
-        format_stage_mapping_id=body.format_stage_mapping_id,
-        action=body.action,
-        remark_id=body.remark_id,
-        remark_text=body.remark_text,
-        answers=to_payloads(body.answers) if body.answers else None,
-        extra_stages=[
-            ExtraStagePayload(
-                format_stage_mapping_id=es.format_stage_mapping_id,
-                checklist_stage_id=es.checklist_stage_id,
-                answers=to_payloads(es.answers) if es.answers else None,
-            )
-            for es in body.extra_stages
-        ] if body.extra_stages else None,
-    )
-
+    service = service_cls(session)
+    role_id = await service.resolve_active_role_id(current_user.id)
     try:
-        result = await service.execute(request, user_id=current_user.id, role_id=role_id)
+        result = await service.execute(body.to_dto(), user_id=current_user.id, role_id=role_id)
     except EntityNotFoundError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    await session.commit()
-
-    return SubmitStageResponseSchema(
-        success=result.success,
-        checklist_request_id=result.checklist_request_id,
-        checklist_stage_id=result.checklist_stage_id,
-        new_status=result.new_status,
-        message=result.message,
-    )
+    return SubmitStageResponseSchema.from_dto(result)

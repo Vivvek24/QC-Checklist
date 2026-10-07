@@ -112,7 +112,7 @@ export const DashboardPage = () => {
   const actionBodyTemplate = (row: DashboardRow) => (
     <div className="flex align-items-center gap-1">
       {row.action_flag && (
-        <Button icon="pi pi-arrow-right" rounded text raised severity="success" size="small"
+        <Button icon="pi pi-file-plus" rounded text raised severity="success" size="small"
           tooltip="Fill Next Stage" tooltipOptions={{ position: 'top' }}
           onClick={() => navigate(`/qc-checklist/create-request?request=${encodeURIComponent(row.request_number)}`)} />
       )}

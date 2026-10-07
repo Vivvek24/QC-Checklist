@@ -14,7 +14,7 @@
  *
  * Exposes validate()/getAnswers() via ref — the same contract the old
  * per-format Snip components used — so CreateRequestPage's submit/draft flow
- * doesn't need to change. Answer state and validation live in useTemplateAnswers;
+ * doesn't need to change. Answer state and validation live in useValidateTemplateAnswers;
  * this component is just layout + wiring cells to that state.
  */
 
@@ -22,9 +22,9 @@ import { forwardRef, useImperativeHandle } from 'react';
 import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 import type { ColumnPreview } from '../models/ChecklistPreview';
 import type { QuestionAnswerPreview, TemplateDrivenSnipHandle } from '../models/TemplateTypes';
-import type { SavedAnswer } from '../hooks/useTemplateAnswers';
+import type { SavedAnswer } from '../hooks/useValidateTemplateAnswers';
 import { useResolvedColumns } from '../hooks/useResolvedColumns';
-import { useTemplateAnswers } from '../hooks/useTemplateAnswers';
+import { useValidateTemplateAnswers } from '../hooks/useValidateTemplateAnswers';
 import { TemplateCell } from './TemplateCell';
 
 export type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
@@ -55,9 +55,9 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
       answers, setAnswers,
       responses, setResponses,
       helpers, setHelpers,
-      errors, clearError,
+      errors, helperErrors, clearError, clearHelperError,
       validate, getAnswers,
-    } = useTemplateAnswers({ questions, hasOptionColumn, hasAnswerColumn, hasResponseColumn, isBasicDetails, savedAnswers });
+    } = useValidateTemplateAnswers({ questions, hasOptionColumn, hasAnswerColumn, hasResponseColumn, isBasicDetails, savedAnswers });
 
     useImperativeHandle(ref, () => ({ validate, getAnswers }));
 
@@ -129,13 +129,15 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
                           clearError(key, 'response');
                         }}
                         helperValues={helpers[key] || []}
-                        onHelperChange={(idx, val) =>
+                        helperErrors={helperErrors[key]}
+                        onHelperChange={(idx, val) => {
                           setHelpers((prev) => {
                             const arr = [...(prev[key] || [])];
                             arr[idx] = val;
                             return { ...prev, [key]: arr };
-                          })
-                        }
+                          });
+                          clearHelperError(key, idx);
+                        }}
                         onHelperRemove={(idx) =>
                           setHelpers((prev) => {
                             const arr = [...(prev[key] || [])];

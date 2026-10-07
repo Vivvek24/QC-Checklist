@@ -1,5 +1,5 @@
 /**
- * useTemplateAnswers — per-row answer state and validation for TemplateDrivenSnip.
+ * useValidateTemplateAnswers — per-row answer state and validation for TemplateDrivenSnip.
  *
  * Owns the five pieces of state a row can carry (selected option(s), typed
  * answer, response radio, "+ Add" helper text boxes, and field-level
@@ -19,7 +19,7 @@ export interface SavedAnswer {
   response_answer: string;
 }
 
-export interface UseTemplateAnswersOptions {
+export interface UseValidateTemplateAnswersOptions {
   questions: QuestionAnswerPreview[];
   hasOptionColumn: boolean;
   hasAnswerColumn: boolean;
@@ -29,7 +29,7 @@ export interface UseTemplateAnswersOptions {
   savedAnswers?: Record<number, SavedAnswer>;
 }
 
-export interface UseTemplateAnswersResult {
+export interface UseValidateTemplateAnswersResult {
   selections: Record<number, unknown>;
   setSelections: React.Dispatch<React.SetStateAction<Record<number, unknown>>>;
   answers: Record<number, string>;
@@ -39,24 +39,33 @@ export interface UseTemplateAnswersResult {
   helpers: Record<number, string[]>;
   setHelpers: React.Dispatch<React.SetStateAction<Record<number, string[]>>>;
   errors: Record<number, RowErrors>;
+  /** Per-row, per-helper-index inline errors for the "+ Add" helper boxes. */
+  helperErrors: Record<number, (string | undefined)[]>;
   clearError: (key: number, field: keyof RowErrors) => void;
+  /** Clear the inline error for one helper box as the user edits it. */
+  clearHelperError: (key: number, idx: number) => void;
   validate: () => boolean;
   getAnswers: () => TemplateAnswer[];
 }
 
-export const useTemplateAnswers = ({
+/** Only letters, digits, hyphen, underscore, slash and dot are allowed in a
+ * helper value (no spaces or other special characters). */
+const HELPER_ALLOWED = /^[A-Za-z0-9\-_/.]+$/;
+
+export const useValidateTemplateAnswers = ({
   questions,
   hasOptionColumn,
   hasAnswerColumn,
   hasResponseColumn,
   isBasicDetails,
   savedAnswers,
-}: UseTemplateAnswersOptions): UseTemplateAnswersResult => {
+}: UseValidateTemplateAnswersOptions): UseValidateTemplateAnswersResult => {
   const [selections, setSelections] = useState<Record<number, unknown>>({});
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [responses, setResponses] = useState<Record<number, string>>({});
   const [helpers, setHelpers] = useState<Record<number, string[]>>({});
   const [errors, setErrors] = useState<Record<number, RowErrors>>({});
+  const [helperErrors, setHelperErrors] = useState<Record<number, (string | undefined)[]>>({});
 
   // Seed state from pre-loaded saved answers (resuming / viewing a submitted
   // stage). Runs when the saved answers arrive so already-filled stages render
@@ -97,8 +106,17 @@ export const useTemplateAnswers = ({
       return next;
     });
 
+  const clearHelperError = (key: number, idx: number) =>
+    setHelperErrors((prev) => {
+      if (!prev[key] || prev[key][idx] === undefined) return prev;
+      const arr = [...prev[key]];
+      arr[idx] = undefined;
+      return { ...prev, [key]: arr };
+    });
+
   const validate = (): boolean => {
     const newErrors: Record<number, RowErrors> = {};
+    const newHelperErrors: Record<number, (string | undefined)[]> = {};
     let isValid = true;
 
     for (const row of questions) {
@@ -139,12 +157,42 @@ export const useTemplateAnswers = ({
         }
       }
 
+      // Helper ("+ Add") boxes: each is required, must contain no special
+      // characters/spaces, and must not duplicate the main answer or another
+      // helper on the same row.
+      const rowHelpers = helpers[key] || [];
+      if (rowHelpers.length > 0) {
+        const mainValue = (answers[key] || '').trim();
+        const perHelper: (string | undefined)[] = [];
+        const seen = new Set<string>();
+        rowHelpers.forEach((raw, idx) => {
+          const value = (raw || '').trim();
+          let err: string | undefined;
+          if (!value) {
+            err = 'Please enter the value.';
+          } else if (!HELPER_ALLOWED.test(value)) {
+            err = 'Special characters not allowed!';
+          } else if (value.toUpperCase() === mainValue.toUpperCase()) {
+            err = 'Cannot be same as the answer above.';
+          } else if (seen.has(value.toUpperCase())) {
+            err = 'Duplicate value.';
+          }
+          if (!err) seen.add(value.toUpperCase());
+          else isValid = false;
+          perHelper[idx] = err;
+        });
+        if (perHelper.some((e) => e !== undefined)) {
+          newHelperErrors[key] = perHelper;
+        }
+      }
+
       if (rowErrors.options || rowErrors.answer || rowErrors.response) {
         newErrors[key] = rowErrors;
       }
     }
 
     setErrors(newErrors);
+    setHelperErrors(newHelperErrors);
     return isValid;
   };
 
@@ -171,7 +219,7 @@ export const useTemplateAnswers = ({
     answers, setAnswers,
     responses, setResponses,
     helpers, setHelpers,
-    errors, clearError,
+    errors, helperErrors, clearError, clearHelperError,
     validate, getAnswers,
   };
 };

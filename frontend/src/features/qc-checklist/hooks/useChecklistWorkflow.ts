@@ -1,5 +1,6 @@
 /**
- * useCreateRequest — data loading and submission for CreateRequestPage.
+ * useChecklistWorkflow — checklist data loading + the stage lifecycle actions
+ * (submit / save-as-draft / approve / refer-back) for a request.
  *
  * Two modes:
  *  - New request (default): user picks a format, fills the first stage, and
@@ -22,7 +23,7 @@ import { useRef, useState } from 'react';
 import { qcChecklistApi, type SubmitStageAnswerInput, type SubmitStageExtra, type ApprovalLabelMappingResponse } from '../api/qcChecklistApi';
 import type { ApprovalSnipHandle } from '../components/ApprovalSnip';
 import type { ChecklistPreview, ColumnPreview } from '../models/ChecklistPreview';
-import type { SavedAnswer } from '../hooks/useTemplateAnswers';
+import type { SavedAnswer } from './useValidateTemplateAnswers';
 import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 
 /** Pull the human-readable message out of an API error. The backend's
@@ -38,7 +39,7 @@ export interface SnipHandle {
   getAnswers: () => SubmitStageAnswerInput[];
 }
 
-export interface UseCreateRequestResult {
+export interface UseChecklistWorkflowResult {
   loading: boolean;
   preview: ChecklistPreview | null;
   /** Set once a format is loaded (new or continuation); drives the dropdown. */
@@ -65,7 +66,7 @@ export interface UseCreateRequestResult {
 }
 
 
-export interface UseCreateRequestOptions {
+export interface UseChecklistWorkflowOptions {
   onError: (detail: string) => void;
   onSubmitSuccess: () => void;
   onDraftSuccess: () => void;
@@ -73,13 +74,13 @@ export interface UseCreateRequestOptions {
   onReferBackSuccess: () => void;
 }
 
-export const useCreateRequest = ({
+export const useChecklistWorkflow = ({
   onError,
   onSubmitSuccess,
   onDraftSuccess,
   onApproveSuccess,
   onReferBackSuccess,
-}: UseCreateRequestOptions): UseCreateRequestResult => {
+}: UseChecklistWorkflowOptions): UseChecklistWorkflowResult => {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<ChecklistPreview | null>(null);
   const [formatId, setFormatId] = useState<number | null>(null);

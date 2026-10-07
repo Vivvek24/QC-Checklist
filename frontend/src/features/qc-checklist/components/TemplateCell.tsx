@@ -1,7 +1,7 @@
 /**
  * TemplateCell — renders a single cell of TemplateDrivenSnip's grid, branching
  * on the column's column_type. Pure presentational: all state lives in the
- * caller (useTemplateAnswers) and is passed in / mutated via callbacks.
+ * caller (useValidateTemplateAnswers) and is passed in / mutated via callbacks.
  */
 
 import { InputText } from 'primereact/inputtext';
@@ -9,7 +9,7 @@ import { RadioButton } from 'primereact/radiobutton';
 import { OptionSelector } from './OptionSelector';
 import type { ColumnPreview } from '../models/ChecklistPreview';
 import type { QuestionAnswerPreview } from '../models/TemplateTypes';
-import type { RowErrors } from '../hooks/useTemplateAnswers';
+import type { RowErrors } from '../hooks/useValidateTemplateAnswers';
 
 type ColumnLike = Pick<ColumnPreview, 'column_type'>;
 
@@ -27,6 +27,8 @@ interface Props {
   response: string;
   onResponseChange: (value: string) => void;
   helperValues: string[];
+  /** Per-helper-index inline error messages (undefined = no error). */
+  helperErrors?: (string | undefined)[];
   onHelperChange: (idx: number, value: string) => void;
   onHelperRemove: (idx: number) => void;
   onHelperAdd: () => void;
@@ -45,6 +47,7 @@ export const TemplateCell = ({
   response,
   onResponseChange,
   helperValues,
+  helperErrors,
   onHelperChange,
   onHelperRemove,
   onHelperAdd,
@@ -110,29 +113,35 @@ export const TemplateCell = ({
             style={{ height: '1.85rem', fontSize: '0.75rem' }}
           />
           {rowErr?.answer && <small className="qc-validation-error">{rowErr.answer}</small>}
-          {helperValues.map((val, idx) => (
-            <div key={idx} className="flex align-items-center gap-1">
-              <InputText
-                value={val}
-                className="flex-1"
-                onChange={(e) => onHelperChange(idx, e.target.value)}
-                disabled={disabled}
-                style={{ height: '1.85rem', fontSize: '0.75rem' }}
-              />
-              {!disabled && (
-              <button
-                type="button"
-                onClick={() => onHelperRemove(idx)}
-                style={{
-                  border: 'none', background: 'transparent', color: 'var(--color-error)',
-                  cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.25rem',
-                }}
-              >
-                <i className="pi pi-times" style={{ fontSize: '0.7rem' }} />
-              </button>
-              )}
-            </div>
-          ))}
+          {helperValues.map((val, idx) => {
+            const helperErr = helperErrors?.[idx];
+            return (
+              <div key={idx} className="flex flex-column gap-1">
+                <div className="flex align-items-center gap-1">
+                  <InputText
+                    value={val}
+                    className={helperErr ? 'flex-1 p-invalid' : 'flex-1'}
+                    onChange={(e) => onHelperChange(idx, e.target.value)}
+                    disabled={disabled}
+                    style={{ height: '1.85rem', fontSize: '0.75rem' }}
+                  />
+                  {!disabled && (
+                    <button
+                      type="button"
+                      onClick={() => onHelperRemove(idx)}
+                      style={{
+                        border: 'none', background: 'transparent', color: 'var(--color-error)',
+                        cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.25rem',
+                      }}
+                    >
+                      <i className="pi pi-times" style={{ fontSize: '0.7rem' }} />
+                    </button>
+                  )}
+                </div>
+                {helperErr && <small className="qc-validation-error">{helperErr}</small>}
+              </div>
+            );
+          })}
           {row.has_multiple_text_box && canAdd && !disabled && (
             <button
               type="button"

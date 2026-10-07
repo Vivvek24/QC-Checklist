@@ -4,23 +4,34 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.infrastructure.database.models.qc_checklist.checklist_request_model import ChecklistRequestModel
-from src.infrastructure.database.models.qc_checklist.checklist_stage_model import ChecklistStageModel
-from src.infrastructure.database.models.qc_checklist.checklist_stage_section_model import ChecklistStageSectionModel
-from src.infrastructure.database.models.qc_checklist.question_answer_model import QuestionAnswerModel
-from src.infrastructure.database.models.qc_checklist.question_answer_helper_model import QuestionAnswerHelperModel
-from src.infrastructure.database.models.qc_checklist.question_answer_sub_question_answer_model import QuestionAnswerSubQuestionAnswerModel
-from src.infrastructure.database.models.masters.question_model import QuestionModel
-from src.infrastructure.database.models.masters.question_option_model import QuestionOptionModel
 from src.infrastructure.database.models.masters.format_model import FormatModel
-from src.infrastructure.database.models.masters.format_stage_mapping_model import FormatStageMappingModel
+from src.infrastructure.database.models.masters.format_stage_mapping_model import (
+    FormatStageMappingModel,
+)
+from src.infrastructure.database.models.masters.question_model import QuestionModel
 from src.infrastructure.database.models.masters.stage_model import StageModel
-from src.infrastructure.database.models.masters.stage_question_mapping_model import StageQuestionMappingModel
+from src.infrastructure.database.models.masters.stage_question_mapping_model import (
+    StageQuestionMappingModel,
+)
 from src.infrastructure.database.models.masters.validation_type_model import ValidationTypeModel
-
+from src.infrastructure.database.models.qc_checklist.checklist_request_model import (
+    ChecklistRequestModel,
+)
+from src.infrastructure.database.models.qc_checklist.checklist_stage_model import (
+    ChecklistStageModel,
+)
+from src.infrastructure.database.models.qc_checklist.question_answer_helper_model import (
+    QuestionAnswerHelperModel,
+)
+from src.infrastructure.database.models.qc_checklist.question_answer_model import (
+    QuestionAnswerModel,
+)
+from src.infrastructure.database.models.qc_checklist.question_answer_sub_question_answer_model import (
+    QuestionAnswerSubQuestionAnswerModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -384,57 +395,25 @@ class ValidateChecklistService:
         if not stage_master_id:
             return
 
-        # Check for duplicate using raw SQL (mirrors JA_BatchNoValidation)
-        batch_in_clause = ", ".join([f"'{v}'" for v in batch_values])
+        # A duplicate exists when SOME OTHER request, on this same stage master,
+        # has both a matching Batch No answer AND a matching Test Name answer.
+        # Built with the ORM as two "request ids that match X" subqueries whose
+        # intersection means the same request matched both (mirrors the Mendix
+        # JA_BatchNoValidation duplicate check).
         test_value = test_answer.textbox_value
 
-        sql = f"""
-SELECT EXISTS (
-    SELECT 1
-    FROM checklist_requests r
-    JOIN checklist_stages cs ON cs.checklist_request_id = r.id
-    JOIN format_stage_mappings fsm ON fsm.id = cs.format_stage_mapping_id
-    JOIN stages s ON s.id = fsm.stage_id
-    JOIN stage_question_mappings sqm ON sqm.format_stage_mapping_id = fsm.id
-    JOIN questions q ON q.id = sqm.question_id
-    JOIN question_answers qa ON qa.checklist_stage_id = cs.id AND qa.stage_question_mapping_id = sqm.id
-    LEFT JOIN question_answer_sub_question_answers qasqa ON qasqa.question_answer_id = qa.id
-    LEFT JOIN question_answer_helpers qah ON qah.id = qasqa.question_answer_helper_id
-    WHERE q.id IN (:batch_q_id, :test_q_id)
-      AND s.id = :stage_master_id
-      AND r.id <> :checklist_request_id
-      AND r.is_removed = false
-    GROUP BY r.id
-    HAVING COUNT(DISTINCT q.id) = 2
-       AND BOOL_OR(
-            q.id = :batch_q_id2
-            AND (
-                UPPER(qa.textbox_value) IN ({batch_in_clause})
-                OR UPPER(qah.text_box_value) IN ({batch_in_clause})
-            )
-       )
-       AND BOOL_OR(
-            q.id = :test_q_id2
-            AND UPPER(qa.textbox_value) = UPPER(:test_value)
-       )
-)
-"""
-        params = {
-            "batch_q_id": batch_q.id,
-            "test_q_id": test_q.id,
-            "stage_master_id": stage_master_id,
-            "checklist_request_id": checklist_request_id,
-            "batch_q_id2": batch_q.id,
-            "test_q_id2": test_q.id,
-            "test_value": test_value,
-        }
-
         try:
-            dup_result = await self._session.execute(text(sql), params)
-            exists = dup_result.scalar()
+            exists = await self._has_duplicate_batch_test(
+                batch_question_id=batch_q.id,
+                test_question_id=test_q.id,
+                stage_master_id=stage_master_id,
+                batch_values=batch_values,
+                test_value=test_value,
+                exclude_request_id=checklist_request_id,
+            )
             if exists:
                 result.add_error(stage_id, stage_name, qa.question_id, question.title,
-                                 "Duplicate Batch No + Test Name combination already exists in another request!")
+                                 " Batch No + Test Name combination already exists in another request!")
         except Exception:
             # Don't fabricate a validation error if the duplicate-check query
             # itself fails — but surface it loudly so a broken query/schema is
@@ -443,6 +422,77 @@ SELECT EXISTS (
                 "Batch/Test duplicate-check query failed for request %s stage %s",
                 checklist_request_id, stage_id,
             )
+
+    async def _has_duplicate_batch_test(
+        self,
+        *,
+        batch_question_id: int,
+        test_question_id: int,
+        stage_master_id: int,
+        batch_values: list[str],
+        test_value: str,
+        exclude_request_id: int,
+    ) -> bool:
+        """True if another (not-removed) request on the same stage master has a
+        Batch No answer in `batch_values` AND a Test Name answer == `test_value`.
+
+        Expressed as two ORM subqueries — request ids matching the batch value,
+        and request ids matching the test value — intersected: a request id in
+        both means the same request carried both answers.
+        """
+        upper_batch_values = [v.upper() for v in batch_values]
+
+        # Short aliases keep the join conditions readable.
+        req, cs = ChecklistRequestModel, ChecklistStageModel
+        fsm, sqm, qa = FormatStageMappingModel, StageQuestionMappingModel, QuestionAnswerModel
+
+        # Common joins: request → stage → fsm (on the given stage master) → sqm → answer.
+        def _base(question_id: int):
+            return (
+                select(req.id)
+                .join(cs, cs.checklist_request_id == req.id)
+                .join(fsm, fsm.id == cs.format_stage_mapping_id)
+                .join(sqm, sqm.format_stage_mapping_id == fsm.id)
+                .join(
+                    qa,
+                    (qa.checklist_stage_id == cs.id)
+                    & (qa.stage_question_mapping_id == sqm.id),
+                )
+                .where(
+                    fsm.stage_id == stage_master_id,
+                    sqm.question_id == question_id,
+                    req.id != exclude_request_id,
+                    req.is_removed.is_(False),
+                )
+            )
+
+        # Batch match: the answer's own value OR any of its helper values.
+        qasqa, qah = QuestionAnswerSubQuestionAnswerModel, QuestionAnswerHelperModel
+        batch_requests = (
+            _base(batch_question_id)
+            .outerjoin(qasqa, qasqa.question_answer_id == qa.id)
+            .outerjoin(qah, qah.id == qasqa.question_answer_helper_id)
+            .where(
+                func.upper(qa.textbox_value).in_(upper_batch_values)
+                | func.upper(qah.text_box_value).in_(upper_batch_values)
+            )
+        )
+
+        # Test match: the answer value equals the test value (case-insensitive).
+        test_requests = _base(test_question_id).where(
+            func.upper(qa.textbox_value) == func.upper(test_value)
+        )
+
+        dup_stmt = select(
+            select(req.id)
+            .where(
+                req.id.in_(batch_requests),
+                req.id.in_(test_requests),
+            )
+            .exists()
+        )
+        dup_result = await self._session.execute(dup_stmt)
+        return bool(dup_result.scalar())
 
     async def _get_question_by_validation_type(self, validation_type_name: str) -> QuestionModel | None:
         """Get question linked to a specific validation type."""
