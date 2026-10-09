@@ -1,7 +1,7 @@
 /**
  * Read-only shapes returned by GET /qc-checklist/preview, as consumed by
- * CreateRequestPage and the Snip grid components it renders (AQLSnip,
- * ReconcilationSheetSnip, TemplateDrivenSnip, ApprovalSnip).
+ * CreateRequestPage and the Snip grid components it renders
+ * (ReconcilationSheetSnip, TemplateDrivenSnip, ApprovalSnip).
  *
  * Deliberately separate from template-studio/models/Preview.ts — that one
  * is Template Studio's own read model for the same endpoint, and the two

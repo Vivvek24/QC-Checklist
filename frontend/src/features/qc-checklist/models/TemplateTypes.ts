@@ -15,8 +15,14 @@ export interface QuestionAnswerPreview {
   answer_type: string;
   has_text_box: boolean;
   has_multiple_text_box: boolean;
+  has_sub_question?: boolean;
+  /** When false, this question's answer field is locked (read-only) even for a
+   * fillable stage — configured per question in Template Studio. */
+  is_editable?: boolean;
   aql_limit?: string;
   options: { id: number; label: string }[];
+  /** Child questions shown nested under this one (read-only display). */
+  sub_questions?: QuestionAnswerPreview[];
 }
 
 export interface TemplateAnswer {

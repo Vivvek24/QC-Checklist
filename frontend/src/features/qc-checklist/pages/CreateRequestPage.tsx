@@ -15,7 +15,6 @@ import { Tag } from 'primereact/tag';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { ChecklistHeader } from '../components/ChecklistHeader';
 import { TemplateDrivenSnip } from '../components/TemplateDrivenSnip';
-import { AQLSnip } from '../components/AQLSnip';
 import { ReconcilationSheetSnip } from '../components/ReconcilationSheetSnip';
 import { ApprovalSnip } from '../components/ApprovalSnip';
 import { FORMAT_TYPE, BASIC_DETAILS_STAGE } from '../../masters/constants';
@@ -137,15 +136,7 @@ export const CreateRequestPage = () => {
                   {/* Expanded — grid + approval */}
                   {isExpanded && (
                     <div style={{ borderTop: '1px solid #fca5a5' }}>
-                      {preview.format_type === FORMAT_TYPE.AQL ? (
-                        <AQLSnip
-                          questions={stage.questions}
-                          sections={stage.sections ?? []}
-                          stageName={stage.stage_name}
-                          stageStatus={stage.status}
-                          hasSection={stage.has_section}
-                        />
-                      ) : preview.format_type === FORMAT_TYPE.RECONCILATION_SHEET ? (
+                      {preview.format_type === FORMAT_TYPE.RECONCILATION_SHEET ? (
                         <ReconcilationSheetSnip
                           ref={(el) => { snipRefs.current[fsmId] = el; }}
                           questions={stage.questions}
@@ -159,6 +150,8 @@ export const CreateRequestPage = () => {
                           ref={(el) => { snipRefs.current[fsmId] = el; }}
                           questions={stage.questions}
                           columns={stageColumns[fsmId] ?? []}
+                          sections={stage.sections ?? []}
+                          hasSection={stage.has_section}
                           stageName={stage.stage_name}
                           stageStatus={stage.status}
                           savedAnswers={savedAnswersByFsm[fsmId]}

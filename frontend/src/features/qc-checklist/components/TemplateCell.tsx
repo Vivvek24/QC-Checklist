@@ -53,13 +53,29 @@ export const TemplateCell = ({
   onHelperAdd,
 }: Props) => {
   const key = row.stage_question_mapping_id;
+  // Locked either because the whole stage is read-only, or because this
+  // question is configured non-editable (is_editable=false) in Template Studio.
+  const locked = disabled || row.is_editable === false;
 
   switch (column.column_type) {
     case 'SERIAL':
       return <span style={{ fontWeight: 500 }}>{row.serial_number}</span>;
 
     case 'QUESTION':
-      return <span style={{ color: '#1e293b' }}>{row.question_title}</span>;
+      return (
+        <div style={{ color: '#1e293b' }}>
+          <div>{row.question_title}</div>
+          {row.has_sub_question && (row.sub_questions?.length ?? 0) > 0 && (
+            <div style={{ marginTop: '0.3rem', paddingLeft: '0.75rem' }}>
+              {row.sub_questions!.map((sub) => (
+                <div key={sub.question_id} style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: '0.2rem' }}>
+                  • {sub.question_title}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
 
     case 'OPTION':
       return (
@@ -69,7 +85,7 @@ export const TemplateCell = ({
             options={row.options}
             value={selection}
             onChange={onSelectionChange}
-            disabled={disabled}
+            disabled={locked}
           />
           {rowErr?.options && <small className="qc-validation-error">{rowErr.options}</small>}
         </>
@@ -89,7 +105,7 @@ export const TemplateCell = ({
                   value={v}
                   checked={response === v}
                   onChange={() => onResponseChange(v)}
-                  disabled={disabled}
+                  disabled={locked}
                 />
                 <label style={{ fontSize: '0.72rem' }}>{v}</label>
               </div>
@@ -109,7 +125,7 @@ export const TemplateCell = ({
             value={answer}
             className={rowErr?.answer ? 'w-full p-invalid' : 'w-full'}
             onChange={(e) => onAnswerChange(e.target.value)}
-            disabled={disabled}
+            disabled={locked}
             style={{ height: '1.85rem', fontSize: '0.75rem' }}
           />
           {rowErr?.answer && <small className="qc-validation-error">{rowErr.answer}</small>}
@@ -122,10 +138,10 @@ export const TemplateCell = ({
                     value={val}
                     className={helperErr ? 'flex-1 p-invalid' : 'flex-1'}
                     onChange={(e) => onHelperChange(idx, e.target.value)}
-                    disabled={disabled}
+                    disabled={locked}
                     style={{ height: '1.85rem', fontSize: '0.75rem' }}
                   />
-                  {!disabled && (
+                  {!locked && (
                     <button
                       type="button"
                       onClick={() => onHelperRemove(idx)}
@@ -142,7 +158,7 @@ export const TemplateCell = ({
               </div>
             );
           })}
-          {row.has_multiple_text_box && canAdd && !disabled && (
+          {row.has_multiple_text_box && canAdd && !locked && (
             <button
               type="button"
               onClick={onHelperAdd}
