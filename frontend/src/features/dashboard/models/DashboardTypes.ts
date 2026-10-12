@@ -42,17 +42,22 @@ export function formatDate(d: Date): string {
 /** Preset date ranges for the dashboard filter. Each computes a [from, to)
  * window (to is exclusive). */
 export type RangeKey =
+  | 'all_time'
   | 'today' | 'yesterday' | 'last7' | 'last30'
   | 'this_month' | 'last_month' | 'this_year' | 'last_year';
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-export function computeRange(key: RangeKey): { from: Date; to: Date } {
+/** Resolve a preset into a [from, to) window. 'all_time' returns nulls — the
+ * backend treats missing dates as unbounded, so every record is included. */
+export function computeRange(key: RangeKey): { from: Date | null; to: Date | null } {
   const now = new Date();
   const today = startOfDay(now);
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
 
   switch (key) {
+    case 'all_time':
+      return { from: null, to: null };
     case 'today':
       return { from: today, to: tomorrow };
     case 'yesterday': {
@@ -79,6 +84,7 @@ export function computeRange(key: RangeKey): { from: Date; to: Date } {
 }
 
 export const RANGE_OPTIONS: { label: string; value: RangeKey }[] = [
+  { label: 'All Time', value: 'all_time' },
   { label: 'Today', value: 'today' },
   { label: 'Yesterday', value: 'yesterday' },
   { label: 'Last 7 Days', value: 'last7' },

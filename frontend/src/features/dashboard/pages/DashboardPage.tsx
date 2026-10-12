@@ -16,8 +16,10 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { Toast } from 'primereact/toast';
 import { ProgressSpinner } from 'primereact/progressspinner';
+import { useCan } from '@core/rbac/usePermissions';
 import { DashboardKpiCards, type KpiStatus } from '../components/DashboardKpiCards';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { qcChecklistApi } from '../../qc-checklist/api/qcChecklistApi';
 import {
   RANGE_OPTIONS,
   STATUS_COLORS,
@@ -46,6 +48,25 @@ export const DashboardPage = () => {
 
   // The Pending / Approved summary cards double as the view selector.
   const [activeView, setActiveView] = useState<'pending' | 'approved'>('pending');
+  // Request number currently being exported to PDF (drives the button spinner).
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
+  // PDF export is gated on the same (resource, action) the endpoint authorises
+  // on — no grant, no button.
+  const canExportPdf = useCan('checklist_requests', 'EXPORT');
+
+  const handleDownloadPdf = async (requestNumber: string) => {
+    setDownloadingPdf(requestNumber);
+    try {
+      await qcChecklistApi.downloadRequestPdf(requestNumber);
+    } catch {
+      toast.current?.show({
+        severity: 'error', summary: 'Download failed',
+        detail: `Could not generate the PDF for ${requestNumber}.`, life: 5000,
+      });
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
 
   const dateBodyTemplate = (row: DashboardRow) => {
     if (!row.created_date) return <span style={{ color: '#94a3b8' }}>—</span>;
@@ -91,14 +112,32 @@ export const DashboardPage = () => {
     </div>
   );
 
-  const renderTable = (rows: DashboardRow[], withActions: boolean, emptyMsg: string) => (
+  // Approved rows get a PDF download button (shows a spinner while generating).
+  const approvedActionBodyTemplate = (row: DashboardRow) => (
+    <div className="flex align-items-center gap-1">
+      <Button icon="pi pi-file-pdf" rounded text raised severity="danger" size="small"
+        loading={downloadingPdf === row.request_number}
+        tooltip="Download PDF" tooltipOptions={{ position: 'top' }}
+        onClick={() => handleDownloadPdf(row.request_number)} />
+    </div>
+  );
+
+  const renderTable = (
+    rows: DashboardRow[],
+    actionsMode: 'pending' | 'approved' | 'none',
+    emptyMsg: string,
+  ) => (
     <DataTable value={rows} size="small" stripedRows paginator rows={15} removableSort
       emptyMessage={emptyMsg} style={{ fontSize: '0.78rem' }}
       scrollable scrollHeight="calc(100vh - 420px)">
       <Column field="request_number" header="Request No" body={requestNoBody}
         style={{ minWidth: '9.5rem' }} className="qc-frozen-col" sortable frozen />
-      {withActions && (
+      {actionsMode === 'pending' && (
         <Column header="Actions" body={actionBodyTemplate}
+          style={{ minWidth: '6rem', left: '9.5rem' }} className="qc-frozen-col" frozen />
+      )}
+      {actionsMode === 'approved' && canExportPdf && (
+        <Column header="Actions" body={approvedActionBodyTemplate}
           style={{ minWidth: '6rem', left: '9.5rem' }} className="qc-frozen-col" frozen />
       )}
       <Column field="batch_no" header="Batch No" style={{ minWidth: '9rem' }} sortable />
@@ -184,8 +223,8 @@ export const DashboardPage = () => {
             </div>
           </div>
           {activeView === 'pending'
-            ? renderTable(pendingRows, true, 'No matching pending requests.')
-            : renderTable(approvedRows, false, 'No matching approved requests.')}
+            ? renderTable(pendingRows, 'pending', 'No matching pending requests.')
+            : renderTable(approvedRows, 'approved', 'No matching approved requests.')}
         </div>
       )}
     </div>

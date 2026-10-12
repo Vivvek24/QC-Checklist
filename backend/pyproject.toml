@@ -17,6 +17,9 @@ dependencies = [
     "bcrypt==4.2.0",
     "structlog==24.4.0",
     "httpx==0.27.2",
+    # Pure-Python PDF generation for checklist report export (no system
+    # binaries required, unlike WeasyPrint's GTK/Cairo stack on Windows).
+    "reportlab==4.2.5",
 ]
 
 [project.optional-dependencies]

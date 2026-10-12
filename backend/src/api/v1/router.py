@@ -37,6 +37,7 @@ from src.api.v1.endpoints.qc_checklist.validate_checklist_controller import rout
 from src.api.v1.endpoints.qc_checklist.submit_stage_controller import router as submit_stage_router
 from src.api.v1.endpoints.qc_checklist.question_answer_controller import router as question_answer_router
 from src.api.v1.endpoints.qc_checklist.question_answer_helper_controller import router as question_answer_helper_router
+from src.api.v1.endpoints.qc_checklist.pdf_export_controller import router as pdf_export_router
 from src.api.v1.endpoints.qc_checklist.stage_approval_label_mapping_controller import router as stage_approval_label_mapping_router
 from src.api.v1.endpoints.rbac_controller import router as rbac_router
 from src.api.v1.endpoints.user_controller import router as user_router
@@ -84,6 +85,7 @@ api_v1_router.include_router(checklist_stage_section_router)
 api_v1_router.include_router(stage_approval_label_mapping_router)
 api_v1_router.include_router(question_answer_router)
 api_v1_router.include_router(question_answer_helper_router)
+api_v1_router.include_router(pdf_export_router)
 
 # ─── Workflow engine ───
 api_v1_router.include_router(approval_matrix_router)

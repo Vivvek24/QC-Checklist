@@ -153,4 +153,21 @@ export const qcChecklistApi = {
     );
     return data.items;
   },
+
+  /** Download the request rendered as a PDF (format-agnostic). Triggers a
+   * browser "Save As" using the server-provided filename. */
+  downloadRequestPdf: async (requestNumber: string): Promise<void> => {
+    const { data } = await apiClient.get<Blob>(
+      `/qc-checklist/${encodeURIComponent(requestNumber)}/pdf`,
+      { responseType: 'blob' }
+    );
+    const url = window.URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${requestNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };

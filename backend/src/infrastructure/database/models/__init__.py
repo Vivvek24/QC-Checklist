@@ -45,6 +45,7 @@ from src.infrastructure.database.models.masters.template_model import (  # noqa:
 )
 
 # ─── QC Checklist ───
+from src.infrastructure.database.models.qc_checklist.checklist_pdf_export_model import ChecklistPdfExportModel  # noqa: F401
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import ChecklistRequestModel  # noqa: F401
 from src.infrastructure.database.models.qc_checklist.checklist_stage_model import ChecklistStageModel  # noqa: F401
 from src.infrastructure.database.models.qc_checklist.checklist_stage_section_model import ChecklistStageSectionModel  # noqa: F401

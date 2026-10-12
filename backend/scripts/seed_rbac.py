@@ -149,6 +149,7 @@ _PERMISSION_TABLE = [
     ("checklist_requests.create",      "API", "checklist_requests",   "CREATE", "Create Checklist Request"),
     ("checklist_requests.update",      "API", "checklist_requests",   "UPDATE", "Update Checklist Request"),
     ("checklist_requests.delete",      "API", "checklist_requests",   "DELETE", "Delete Checklist Request"),
+    ("checklist_requests.export",      "API", "checklist_requests",   "EXPORT", "Export Checklist Request as PDF"),
     ("checklist_stages.list",          "API", "checklist_stages",     "READ",   "List Checklist Stages"),
     ("checklist_stages.create",        "API", "checklist_stages",     "CREATE", "Create Checklist Stage"),
     ("checklist_stages.update",        "API", "checklist_stages",     "UPDATE", "Update Checklist Stage"),
