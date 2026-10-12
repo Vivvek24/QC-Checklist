@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import type { QuestionAnswerPreview, TemplateAnswer } from '../models/TemplateTypes';
+import type { QuestionAnswerPreview, TemplateAnswer, TemplateSubAnswer } from '../models/TemplateTypes';
 
 export type RowErrors = { options?: string; answer?: string; response?: string };
 
@@ -19,6 +19,19 @@ export interface SavedAnswer {
   response_answer: string;
 }
 
+/** A saved sub-question answer (keyed by its own question_id). */
+export interface SavedSubAnswer {
+  question_id: number;
+  textbox_value: string;
+  question_option_id: number | null;
+  response_answer: string;
+}
+
+/** Composite key for a sub-question's state: parent sqm id + sub question id.
+ * Sub-questions all carry stage_question_mapping_id=0, so they must be keyed by
+ * their parent + their own question id to avoid colliding. */
+const subKey = (parentSqmId: number, subQuestionId: number) => `${parentSqmId}:${subQuestionId}`;
+
 export interface UseValidateTemplateAnswersOptions {
   questions: QuestionAnswerPreview[];
   hasOptionColumn: boolean;
@@ -27,6 +40,8 @@ export interface UseValidateTemplateAnswersOptions {
   isBasicDetails: boolean;
   /** Pre-loaded saved answers keyed by stage_question_mapping_id (for read-only view). */
   savedAnswers?: Record<number, SavedAnswer>;
+  /** Pre-loaded saved sub-answers keyed by parent question_id → list of sub-answers. */
+  savedSubAnswers?: Record<number, SavedSubAnswer[]>;
 }
 
 export interface UseValidateTemplateAnswersResult {
@@ -38,6 +53,14 @@ export interface UseValidateTemplateAnswersResult {
   setResponses: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   helpers: Record<number, string[]>;
   setHelpers: React.Dispatch<React.SetStateAction<Record<number, string[]>>>;
+  /** Sub-question answer state, keyed by `${parentSqmId}:${subQuestionId}`. */
+  subSelections: Record<string, unknown>;
+  subAnswers: Record<string, string>;
+  subResponses: Record<string, string>;
+  /** Set a sub-question's value (parent sqm id + sub question id). */
+  setSubSelection: (parentSqmId: number, subQuestionId: number, value: unknown) => void;
+  setSubAnswer: (parentSqmId: number, subQuestionId: number, value: string) => void;
+  setSubResponse: (parentSqmId: number, subQuestionId: number, value: string) => void;
   errors: Record<number, RowErrors>;
   /** Per-row, per-helper-index inline errors for the "+ Add" helper boxes. */
   helperErrors: Record<number, (string | undefined)[]>;
@@ -59,6 +82,7 @@ export const useValidateTemplateAnswers = ({
   hasResponseColumn,
   isBasicDetails,
   savedAnswers,
+  savedSubAnswers,
 }: UseValidateTemplateAnswersOptions): UseValidateTemplateAnswersResult => {
   const [selections, setSelections] = useState<Record<number, unknown>>({});
   const [answers, setAnswers] = useState<Record<number, string>>({});
@@ -66,6 +90,18 @@ export const useValidateTemplateAnswers = ({
   const [helpers, setHelpers] = useState<Record<number, string[]>>({});
   const [errors, setErrors] = useState<Record<number, RowErrors>>({});
   const [helperErrors, setHelperErrors] = useState<Record<number, (string | undefined)[]>>({});
+
+  // Sub-question answer state, keyed by `${parentSqmId}:${subQuestionId}`.
+  const [subSelections, setSubSelections] = useState<Record<string, unknown>>({});
+  const [subAnswers, setSubAnswers] = useState<Record<string, string>>({});
+  const [subResponses, setSubResponses] = useState<Record<string, string>>({});
+
+  const setSubSelection = (parentSqmId: number, subQuestionId: number, value: unknown) =>
+    setSubSelections((prev) => ({ ...prev, [subKey(parentSqmId, subQuestionId)]: value }));
+  const setSubAnswer = (parentSqmId: number, subQuestionId: number, value: string) =>
+    setSubAnswers((prev) => ({ ...prev, [subKey(parentSqmId, subQuestionId)]: value }));
+  const setSubResponse = (parentSqmId: number, subQuestionId: number, value: string) =>
+    setSubResponses((prev) => ({ ...prev, [subKey(parentSqmId, subQuestionId)]: value }));
 
   // Seed state from pre-loaded saved answers (resuming / viewing a submitted
   // stage). Runs when the saved answers arrive so already-filled stages render
@@ -94,6 +130,38 @@ export const useValidateTemplateAnswers = ({
     setResponses(nextResponses);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedAnswers]);
+
+  // Seed sub-question answer state from saved sub-answers. Each parent question
+  // (one that carries sub_questions) maps saved sub-answers by sub question id.
+  useEffect(() => {
+    if (!savedSubAnswers) return;
+    // answer_type per sub-question id, so multi-selects seed as arrays.
+    const subTypeById = new Map<number, string>();
+    for (const q of questions) {
+      for (const sub of q.sub_questions ?? []) subTypeById.set(sub.question_id, sub.answer_type);
+    }
+    const nextSel: Record<string, unknown> = {};
+    const nextAns: Record<string, string> = {};
+    const nextResp: Record<string, string> = {};
+    for (const parent of questions) {
+      if (!parent.sub_questions?.length) continue;
+      const saved = savedSubAnswers[parent.question_id];
+      if (!saved) continue;
+      for (const sa of saved) {
+        const k = subKey(parent.stage_question_mapping_id, sa.question_id);
+        if (sa.question_option_id != null) {
+          const isMulti = subTypeById.get(sa.question_id) === 'Dropdown (multi select)';
+          nextSel[k] = isMulti ? [sa.question_option_id] : sa.question_option_id;
+        }
+        if (sa.textbox_value) nextAns[k] = sa.textbox_value;
+        if (sa.response_answer) nextResp[k] = sa.response_answer;
+      }
+    }
+    setSubSelections(nextSel);
+    setSubAnswers(nextAns);
+    setSubResponses(nextResp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedSubAnswers]);
 
   const clearError = (key: number, field: keyof RowErrors) =>
     setErrors((prev) => {
@@ -196,21 +264,41 @@ export const useValidateTemplateAnswers = ({
     return isValid;
   };
 
+  /** Single-select → a number; multi-select → the first of the array. */
+  const toOptionId = (sel: unknown): number | null =>
+    typeof sel === 'number' ? sel : Array.isArray(sel) && sel.length > 0 ? sel[0] : null;
+
+  const getSubAnswers = (row: QuestionAnswerPreview): TemplateSubAnswer[] => {
+    if (!row.sub_questions?.length) return [];
+    const out: TemplateSubAnswer[] = [];
+    for (const sub of row.sub_questions) {
+      const k = subKey(row.stage_question_mapping_id, sub.question_id);
+      const optionId = toOptionId(subSelections[k]);
+      const text = subAnswers[k] || '';
+      const resp = subResponses[k] || '';
+      // Only send sub-answers the user actually filled.
+      if (optionId == null && !text && !resp) continue;
+      out.push({
+        question_id: sub.question_id,
+        textbox_value: text,
+        question_option_id: optionId,
+        response_answer: resp,
+      });
+    }
+    return out;
+  };
+
   const getAnswers = (): TemplateAnswer[] =>
     questions.map((row) => {
       const key = row.stage_question_mapping_id;
-      // Single-select → a number; multi-select → an array of numbers.
-      const sel = selections[key];
-      const optionId: number | null =
-        typeof sel === 'number' ? sel :
-        Array.isArray(sel) && sel.length > 0 ? sel[0] : null;
       return {
         stage_question_mapping_id: key,
         question_id: row.question_id,
         textbox_value: answers[key] || '',
-        question_option_id: optionId,
+        question_option_id: toOptionId(selections[key]),
         response_answer: responses[key] || '',
         helpers: helpers[key] || [],
+        sub_answers: getSubAnswers(row),
       };
     });
 
@@ -219,6 +307,8 @@ export const useValidateTemplateAnswers = ({
     answers, setAnswers,
     responses, setResponses,
     helpers, setHelpers,
+    subSelections, subAnswers, subResponses,
+    setSubSelection, setSubAnswer, setSubResponse,
     errors, helperErrors, clearError, clearHelperError,
     validate, getAnswers,
   };

@@ -61,6 +61,17 @@ BASIC_DETAILS = "Basic Details"
 
 
 @dataclass
+class SubAnswerPayload:
+    """A sub-question's answer. Persisted as its own QuestionAnswer row and
+    linked to the parent answer via question_answer_sub_question_answers."""
+    question_id: int
+    textbox_value: str = ""
+    question_option_id: int | None = None
+    response_question_option_id: int | None = None
+    response_answer: str = ""
+
+
+@dataclass
 class QuestionAnswerPayload:
     """Payload for a single question answer."""
     stage_question_mapping_id: int
@@ -72,6 +83,7 @@ class QuestionAnswerPayload:
     product_id: int | None = None
     date_time: str | None = None
     helpers: list[str] | None = None
+    sub_answers: list[SubAnswerPayload] | None = None
 
 
 @dataclass
@@ -438,33 +450,97 @@ class StageActionBase:
                 await self._session.flush()
                 qa_id = qa.id
 
+            # Helper ("+ Add") free-text values belong to this answer.
             if ans.helpers:
                 existing_helpers = await self._session.execute(
-                    select(QuestionAnswerSubQuestionAnswerModel).where(
-                        QuestionAnswerSubQuestionAnswerModel.question_answer_id == qa_id
+                    select(QuestionAnswerHelperModel).where(
+                        QuestionAnswerHelperModel.question_answer_id == qa_id
                     )
                 )
                 for eh in existing_helpers.scalars().all():
                     await self._session.delete(eh)
                 for helper_text in ans.helpers:
                     if helper_text.strip():
-                        helper = QuestionAnswerHelperModel(
+                        self._session.add(QuestionAnswerHelperModel(
+                            question_answer_id=qa_id,
                             text_box_value=helper_text,
                             created_by=str(user_id),
                             modified_by=str(user_id),
                             created_date=now,
                             modified_date=now,
-                        )
-                        self._session.add(helper)
-                        await self._session.flush()
-                        self._session.add(QuestionAnswerSubQuestionAnswerModel(
-                            question_answer_id=qa_id,
-                            question_answer_helper_id=helper.id,
-                            created_by=str(user_id),
-                            modified_by=str(user_id),
-                            created_date=now,
-                            modified_date=now,
                         ))
+
+            # Sub-question answers: each is its own QuestionAnswer row, linked to
+            # the parent answer via the self-join. Rewritten each save.
+            await self._persist_sub_answers(stage_id, qa_id, ans.sub_answers, user_id, now)
+
+    async def _persist_sub_answers(
+        self,
+        stage_id: int,
+        parent_qa_id: int,
+        sub_answers: list[SubAnswerPayload] | None,
+        user_id: int,
+        now: datetime,
+    ) -> None:
+        """Persist a parent answer's sub-question answers as child QuestionAnswer
+        rows, linked via question_answer_sub_question_answers. Rewritten on each
+        save: the previous children + links for this parent are removed first."""
+        # Remove the previous links + their child answer rows for this parent.
+        link_result = await self._session.execute(
+            select(QuestionAnswerSubQuestionAnswerModel).where(
+                QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id == parent_qa_id
+            )
+        )
+        links = link_result.scalars().all()
+        child_ids = [link.question_answer_id for link in links]
+        for link in links:
+            await self._session.delete(link)
+        if child_ids:
+            old_children = await self._session.execute(
+                select(QuestionAnswerModel).where(QuestionAnswerModel.id.in_(child_ids))
+            )
+            for child in old_children.scalars().all():
+                await self._session.delete(child)
+        await self._session.flush()
+
+        if not sub_answers:
+            return
+
+        for sub in sub_answers:
+            child = QuestionAnswerModel(
+                checklist_stage_id=stage_id,
+                question_id=sub.question_id,
+                stage_question_mapping_id=None,
+                textbox_value=sub.textbox_value,
+                question_option_id=sub.question_option_id,
+                response_question_option_id=sub.response_question_option_id,
+                response_answer=sub.response_answer,
+                product_id=None,
+                has_helper=False,
+                serial_number=0,
+                sub_answer_serial_no="",
+                test_title="",
+                sample_vails="",
+                answer_total_vails=0,
+                issuer_name="",
+                is_issued_vails=False,
+                has_vails=False,
+                comma_separated_name="",
+                created_by=str(user_id),
+                modified_by=str(user_id),
+                created_date=now,
+                modified_date=now,
+            )
+            self._session.add(child)
+            await self._session.flush()
+            self._session.add(QuestionAnswerSubQuestionAnswerModel(
+                question_answer_id=child.id,
+                question_answer_parent_id=parent_qa_id,
+                created_by=str(user_id),
+                modified_by=str(user_id),
+                created_date=now,
+                modified_date=now,
+            ))
 
     # ── status_format ──────────────────────────────────────────────────────────
 

@@ -22,10 +22,10 @@ import { forwardRef, useImperativeHandle } from 'react';
 import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 import type { ChecklistStagePreview, ColumnPreview, QuestionAnswerPreview, SectionPreview } from '../models/ChecklistPreview';
 import type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
-import type { SavedAnswer } from '../hooks/useValidateTemplateAnswers';
+import type { SavedAnswer, SavedSubAnswer } from '../hooks/useValidateTemplateAnswers';
 import { useResolvedColumns } from '../hooks/useResolvedColumns';
 import { useValidateTemplateAnswers } from '../hooks/useValidateTemplateAnswers';
-import { TemplateCell } from './TemplateCell';
+import { TemplateCell, type SubAnswerAccess } from './TemplateCell';
 
 export type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
 
@@ -39,10 +39,12 @@ interface Props {
   hasSection?: boolean;
   /** Pre-loaded saved answers keyed by stage_question_mapping_id (read-only view). */
   savedAnswers?: Record<number, SavedAnswer>;
+  /** Pre-loaded saved sub-answers keyed by parent question_id. */
+  savedSubAnswers?: Record<number, SavedSubAnswer[]>;
 }
 
 export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
-  ({ questions, columns, stageName, stageStatus, sections = [], hasSection = false, savedAnswers }, ref) => {
+  ({ questions, columns, stageName, stageStatus, sections = [], hasSection = false, savedAnswers, savedSubAnswers }, ref) => {
     const isBasicDetails = stageName === BASIC_DETAILS_STAGE;
     // Editable only while the stage is still fillable; once submitted
     // (Pending) or approved it's view-only until the approver acts.
@@ -65,13 +67,27 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
       answers, setAnswers,
       responses, setResponses,
       helpers, setHelpers,
+      subSelections, subAnswers, subResponses,
+      setSubSelection, setSubAnswer, setSubResponse,
       errors, helperErrors, clearError, clearHelperError,
       validate, getAnswers,
     } = useValidateTemplateAnswers({
-      questions: allQuestions, hasOptionColumn, hasAnswerColumn, hasResponseColumn, isBasicDetails, savedAnswers,
+      questions: allQuestions, hasOptionColumn, hasAnswerColumn, hasResponseColumn,
+      isBasicDetails, savedAnswers, savedSubAnswers,
     });
 
     useImperativeHandle(ref, () => ({ validate, getAnswers }));
+
+    // Access object the QUESTION cell uses to read/write each sub-question's
+    // answer state (keyed in the hook by parent sqm id + sub question id).
+    const subAccess: SubAnswerAccess = {
+      getSelection: (p, s) => subSelections[`${p}:${s}`],
+      getAnswer: (p, s) => subAnswers[`${p}:${s}`] || '',
+      getResponse: (p, s) => subResponses[`${p}:${s}`] || '',
+      setSelection: setSubSelection,
+      setAnswer: setSubAnswer,
+      setResponse: setSubResponse,
+    };
 
     /** Render one table for a given set of columns + question rows. */
     const renderTable = (cols: ColumnPreview[], rows: QuestionAnswerPreview[], keyPrefix: string) => {
@@ -161,6 +177,7 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
                             })
                           }
                           onHelperAdd={() => setHelpers((prev) => ({ ...prev, [key]: [...(prev[key] || []), ''] }))}
+                          subAccess={subAccess}
                         />
                       </td>
                     ))}

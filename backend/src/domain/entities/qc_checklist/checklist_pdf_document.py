@@ -27,16 +27,25 @@ class PdfColumn:
 
 
 @dataclass
+class PdfSubAnswer:
+    """A sub-question's title + its answered value, rendered as a small nested
+    table (Sr.No. / Question / Answer) inside the parent question's cell."""
+
+    question: str
+    answer: str
+
+
+@dataclass
 class PdfRow:
     """One question row in a group's table.
 
     `values` holds the row's value for each column_type (SERIAL / QUESTION /
-    OPTION / ANSWER / RESPONSE / AQL_LIMIT). `sub_questions` are display-only
-    child questions shown nested under the QUESTION cell, mirroring the fill UI.
+    OPTION / ANSWER / RESPONSE / AQL_LIMIT). `sub_answers` are this question's
+    answered sub-questions, shown as a nested table under the QUESTION cell.
     """
 
     values: dict[str, str] = field(default_factory=dict)
-    sub_questions: list[str] = field(default_factory=list)
+    sub_answers: list[PdfSubAnswer] = field(default_factory=list)
 
 
 @dataclass

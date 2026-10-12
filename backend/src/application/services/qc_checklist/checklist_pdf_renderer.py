@@ -37,6 +37,7 @@ from src.domain.entities.qc_checklist.checklist_pdf_document import (
     PdfDocument,
     PdfRowGroup,
     PdfSection,
+    PdfSubAnswer,
 )
 
 # Palette — a muted blue header band on tables + Emcure red for the brand.
@@ -204,12 +205,14 @@ class ChecklistPdfRenderer:
     def _build_table(self, group: PdfRowGroup) -> Table:
         head = self._styles["cell_header"]
         columns = group.columns
+        col_widths = self._column_widths(columns)
 
         data = [[Paragraph(_esc(c.header), head) for c in columns]]
         for row in group.rows:
-            data.append([self._render_cell(c, row) for c in columns])
+            data.append([
+                self._render_cell(c, row, col_widths[i]) for i, c in enumerate(columns)
+            ])
 
-        col_widths = self._column_widths(columns)
         table = Table(data, colWidths=col_widths, repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
@@ -222,19 +225,26 @@ class ChecklistPdfRenderer:
         ]))
         return table
 
-    def _render_cell(self, column: PdfColumn, row):
-        """Render one cell for the given template column type."""
+    def _render_cell(self, column: PdfColumn, row, col_width: float):
+        """Render one cell for the given template column type. `col_width` is
+        this column's drawn width, so nested sub-tables fit inside it."""
         ctype = (column.column_type or "ANSWER").upper()
         value = row.values.get(ctype, "")
 
         if ctype == "QUESTION":
-            return self._question_cell(value, row.sub_questions)
+            # Question text + a Sr.No./Question sub-table (titles only).
+            return self._question_cell(value, row.sub_answers, col_width)
 
         if ctype == "SERIAL":
             return Paragraph(_esc(value), self._styles["cell"])
 
-        # OPTION / ANSWER / RESPONSE / AQL_LIMIT and any custom type: show the
-        # value, or N/A when the question didn't carry one.
+        if ctype == "ANSWER":
+            # Parent answer + an Answer-only sub-table (no Sr.No.), row-aligned
+            # with the sub-questions listed in the Question column.
+            return self._answer_cell(value, row.sub_answers, col_width)
+
+        # OPTION / RESPONSE / AQL_LIMIT and any custom type: show the value, or
+        # N/A when the question didn't carry one.
         return Paragraph(_esc(value) or "N/A", self._styles["cell"])
 
     def _column_widths(self, columns: list[PdfColumn]) -> list[float]:
@@ -253,14 +263,81 @@ class ChecklistPdfRenderer:
         total = sum(weights) or 1.0
         return [avail * w / total for w in weights]
 
-    def _question_cell(self, question: str, sub_questions: list[str]) -> list:
-        """The Question cell: the question text plus any sub-questions nested
-        underneath as bulleted lines (mirrors the fill UI)."""
+    # The parent cell's own left+right padding (set on the outer table style).
+    _CELL_PADDING = 10
+
+    def _question_cell(
+        self, question: str, sub_answers: list[PdfSubAnswer], col_width: float
+    ) -> list:
+        """The Question cell: the question text plus — when it has answered
+        sub-questions — a Sr.No. / Question sub-table (titles), sized to fit
+        within the Question column."""
         flow: list = [Paragraph(_esc(question), self._styles["cell"])]
-        for sub in sub_questions:
-            if sub.strip():
-                flow.append(Paragraph(f"&bull; {_esc(sub)}", self._styles["sub_item"]))
+        if sub_answers:
+            flow.append(Spacer(1, 3))
+            flow.append(self._build_sub_table(
+                col_width,
+                headers=["Sr.No.", "Question"],
+                rows=[[str(i), sa.question] for i, sa in enumerate(sub_answers, start=1)],
+                first_col_fixed=22,
+            ))
         return flow
+
+    def _answer_cell(self, answer: str, sub_answers: list[PdfSubAnswer], col_width: float) -> list:
+        """The Answer cell: the parent answer plus — when it has answered
+        sub-questions — an Answer-only sub-table (no Sr.No.), sized to fit within
+        the Answer column and row-aligned with the Question column's sub-table."""
+        flow: list = [Paragraph(_esc(answer) or "N/A", self._styles["cell"])]
+        if sub_answers:
+            flow.append(Spacer(1, 3))
+            flow.append(self._build_sub_table(
+                col_width,
+                headers=["Answer"],
+                rows=[[sa.answer] for sa in sub_answers],
+            ))
+        return flow
+
+    def _build_sub_table(
+        self,
+        col_width: float,
+        headers: list[str],
+        rows: list[list[str]],
+        first_col_fixed: float | None = None,
+    ) -> Table:
+        """A compact sub-table sized to fit inside its parent column.
+
+        `first_col_fixed` reserves a fixed width for a leading Sr.No. column;
+        the remaining columns share the rest. All widths are clamped to the
+        column's inner width (col_width minus the parent cell padding) so the
+        sub-table never overflows the column.
+        """
+        head = self._styles["cell_header"]
+        cell = self._styles["sub_item"]
+
+        inner = max(col_width - self._CELL_PADDING, 1.0)
+        ncols = len(headers)
+        if first_col_fixed is not None and ncols > 1:
+            first = min(first_col_fixed, inner)
+            rest = (inner - first) / (ncols - 1)
+            col_widths = [first] + [rest] * (ncols - 1)
+        else:
+            col_widths = [inner / ncols] * ncols
+
+        data = [[Paragraph(_esc(h), head) for h in headers]]
+        for r in rows:
+            data.append([Paragraph(_esc(c) or "N/A", cell) for c in r])
+
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
+            ("GRID", (0, 0), (-1, -1), 0.4, _GRID),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        return table
 
     def _build_remarks(self, section: PdfSection) -> KeepTogether:
         """Signatures laid out two per row, each a bordered cell."""

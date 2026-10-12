@@ -343,13 +343,30 @@ export const ConfigTable = ({ columns, rows, questionChoices, stageName, ctx, on
 
       case 'OPTION': {
         if (!q) return needQuestion;
-        if (q.options.length === 0) {
+        const hasOwnOptions = q.options.length > 0;
+        const subsWithOptions = q.hasSubQuestion
+          ? q.subQuestions.filter((s) => s.options && s.options.length > 0)
+          : [];
+        if (!hasOwnOptions && subsWithOptions.length === 0) {
           return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.72rem' }}>no options</span>;
         }
         return (
-          <div className="flex flex-column gap-1">
-            {q.options.map((o) => (
-              <span key={o.id} style={{ fontSize: '0.72rem', color: '#475569' }}>• {o.label}</span>
+          <div className="flex flex-column gap-2">
+            {hasOwnOptions && (
+              <div className="flex flex-column gap-1">
+                {q.options.map((o) => (
+                  <span key={o.id} style={{ fontSize: '0.72rem', color: '#475569' }}>• {o.label}</span>
+                ))}
+              </div>
+            )}
+            {/* Each sub-question's own options, grouped under its title. */}
+            {subsWithOptions.map((sub) => (
+              <div key={sub.id} className="flex flex-column gap-1">
+                <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>{sub.title}</span>
+                {sub.options.map((o) => (
+                  <span key={o.id} style={{ fontSize: '0.72rem', color: '#475569', paddingLeft: '0.4rem' }}>• {o.label}</span>
+                ))}
+              </div>
             ))}
           </div>
         );

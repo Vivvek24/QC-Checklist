@@ -94,10 +94,8 @@ FROM (
     JOIN question_answers qa
         ON qa.checklist_stage_id = cs.id
         AND qa.question_id = q.id
-    LEFT JOIN question_answer_sub_question_answers qasqa
-        ON qasqa.question_answer_id = qa.id
     LEFT JOIN question_answer_helpers qah
-        ON qah.id = qasqa.question_answer_helper_id
+        ON qah.question_answer_id = qa.id
     LEFT JOIN question_options qo
         ON qo.id = qa.question_option_id
     LEFT JOIN products p

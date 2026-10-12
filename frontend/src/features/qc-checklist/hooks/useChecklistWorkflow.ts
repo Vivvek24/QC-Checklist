@@ -23,7 +23,7 @@ import { useRef, useState } from 'react';
 import { qcChecklistApi, type SubmitStageAnswerInput, type SubmitStageExtra, type ApprovalLabelMappingResponse } from '../api/qcChecklistApi';
 import type { ApprovalSnipHandle } from '../components/ApprovalSnip';
 import type { ChecklistPreview, ColumnPreview } from '../models/ChecklistPreview';
-import type { SavedAnswer } from './useValidateTemplateAnswers';
+import type { SavedAnswer, SavedSubAnswer } from './useValidateTemplateAnswers';
 import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 
 /** Pull the human-readable message out of an API error. The backend's
@@ -50,6 +50,8 @@ export interface UseChecklistWorkflowResult {
   stageColumns: Record<number, ColumnPreview[]>;
   /** Pre-loaded saved answers keyed by format_stage_mapping_id → (stage_question_mapping_id → SavedAnswer). */
   savedAnswersByFsm: Record<number, Record<number, SavedAnswer>>;
+  /** Pre-loaded saved sub-answers keyed by format_stage_mapping_id → (parent question_id → SavedSubAnswer[]). */
+  savedSubAnswersByFsm: Record<number, Record<number, SavedSubAnswer[]>>;
   /** Persisted approval-label mappings keyed by format_stage_mapping_id. */
   approvalMappingsByFsm: Record<number, ApprovalLabelMappingResponse[]>;
   /** True while an action (submit/approve/draft/refer-back) is in flight. */
@@ -87,6 +89,7 @@ export const useChecklistWorkflow = ({
   const [expandedStages, setExpandedStages] = useState<Record<number, boolean>>({});
   const [stageColumns, setStageColumns] = useState<Record<number, ColumnPreview[]>>({});
   const [savedAnswersByFsm, setSavedAnswersByFsm] = useState<Record<number, Record<number, SavedAnswer>>>({});
+  const [savedSubAnswersByFsm, setSavedSubAnswersByFsm] = useState<Record<number, Record<number, SavedSubAnswer[]>>>({});
   const [approvalMappingsByFsm, setApprovalMappingsByFsm] = useState<Record<number, ApprovalLabelMappingResponse[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const snipRefs = useRef<Record<number, SnipHandle | null>>({});
@@ -118,6 +121,7 @@ export const useChecklistWorkflow = ({
   const handleFormatChange = async (nextFormatId: number | null) => {
     resetContinuation();
     setSavedAnswersByFsm({});
+    setSavedSubAnswersByFsm({});
     setApprovalMappingsByFsm({});
     if (!nextFormatId) {
       setPreview(null);
@@ -146,6 +150,7 @@ export const useChecklistWorkflow = ({
     setExpandedStages({});
     setStageColumns({});
     setSavedAnswersByFsm({});
+    setSavedSubAnswersByFsm({});
     setApprovalMappingsByFsm({});
     try {
       const request = await qcChecklistApi.getRequestByNumber(requestNumber);
@@ -177,6 +182,7 @@ export const useChecklistWorkflow = ({
       // Load persisted answers for stages that already have data (any
       // non-empty status that isn't a brand-new unopened stage).
       const answersMap: Record<number, Record<number, SavedAnswer>> = {};
+      const subAnswersMap: Record<number, Record<number, SavedSubAnswer[]>> = {};
       const mappingsMap: Record<number, ApprovalLabelMappingResponse[]> = {};
       const fetchPromises: Promise<void>[] = [];
 
@@ -213,10 +219,26 @@ export const useChecklistWorkflow = ({
               answersMap[fsm] = byQuestion;
             })
           );
+          // Saved sub-question answers, grouped by parent question_id.
+          fetchPromises.push(
+            qcChecklistApi.listSubAnswersForStage(stageId).then((groups) => {
+              const byParent: Record<number, SavedSubAnswer[]> = {};
+              for (const g of groups) {
+                byParent[g.parent_question_id] = g.sub_answers.map((s) => ({
+                  question_id: s.question_id,
+                  textbox_value: s.textbox_value || '',
+                  question_option_id: s.question_option_id,
+                  response_answer: s.response_answer || '',
+                }));
+              }
+              subAnswersMap[fsm] = byParent;
+            })
+          );
         }
       }
       await Promise.all(fetchPromises);
       setSavedAnswersByFsm(answersMap);
+      setSavedSubAnswersByFsm(subAnswersMap);
       setApprovalMappingsByFsm(mappingsMap);
 
       // Overlay the live stage statuses from the persisted request onto the
@@ -251,6 +273,7 @@ export const useChecklistWorkflow = ({
       product_id: a.product_id ?? null,
       date_time: a.date_time ?? null,
       helpers: a.helpers.length > 0 ? a.helpers : [],
+      sub_answers: a.sub_answers && a.sub_answers.length > 0 ? a.sub_answers : undefined,
     }));
 
   /** Basic Details is the request header: it has no Submit button of its own,
@@ -394,6 +417,7 @@ export const useChecklistWorkflow = ({
     expandedStages,
     stageColumns,
     savedAnswersByFsm,
+    savedSubAnswersByFsm,
     approvalMappingsByFsm,
     submitting,
     snipRefs,

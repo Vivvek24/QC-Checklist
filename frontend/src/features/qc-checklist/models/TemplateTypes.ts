@@ -25,6 +25,13 @@ export interface QuestionAnswerPreview {
   sub_questions?: QuestionAnswerPreview[];
 }
 
+export interface TemplateSubAnswer {
+  question_id: number;
+  textbox_value: string;
+  question_option_id: number | null;
+  response_answer: string;
+}
+
 export interface TemplateAnswer {
   stage_question_mapping_id: number;
   question_id: number;
@@ -32,6 +39,8 @@ export interface TemplateAnswer {
   question_option_id: number | null;
   response_answer: string;
   helpers: string[];
+  /** Answers for this question's sub-questions (if any). */
+  sub_answers: TemplateSubAnswer[];
 }
 
 export interface TemplateDrivenSnipHandle {

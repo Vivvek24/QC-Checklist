@@ -8,12 +8,30 @@ mapping or payload-building there.
 
 from pydantic import BaseModel
 
+from src.application.services.qc_checklist.stage_action_base_service import SubAnswerPayload
 from src.application.services.qc_checklist.submit_stage_service import (
     ExtraStagePayload,
     QuestionAnswerPayload,
     SubmitStageRequest,
     SubmitStageResult,
 )
+
+
+class SubAnswerSchema(BaseModel):
+    question_id: int
+    textbox_value: str = ""
+    question_option_id: int | None = None
+    response_question_option_id: int | None = None
+    response_answer: str = ""
+
+    def to_payload(self) -> SubAnswerPayload:
+        return SubAnswerPayload(
+            question_id=self.question_id,
+            textbox_value=self.textbox_value,
+            question_option_id=self.question_option_id,
+            response_question_option_id=self.response_question_option_id,
+            response_answer=self.response_answer,
+        )
 
 
 class AnswerSchema(BaseModel):
@@ -26,6 +44,7 @@ class AnswerSchema(BaseModel):
     product_id: int | None = None
     date_time: str | None = None
     helpers: list[str] | None = None
+    sub_answers: list[SubAnswerSchema] | None = None
 
     def to_payload(self) -> QuestionAnswerPayload:
         return QuestionAnswerPayload(
@@ -38,6 +57,7 @@ class AnswerSchema(BaseModel):
             product_id=self.product_id,
             date_time=self.date_time,
             helpers=self.helpers,
+            sub_answers=[s.to_payload() for s in self.sub_answers] if self.sub_answers else None,
         )
 
 

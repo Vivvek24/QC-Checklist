@@ -9,7 +9,7 @@ format-specific: stages, questions, columns and labels are whatever the
 format's configuration produced, so the same code renders any format.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import Row, func, select
@@ -23,6 +23,7 @@ from src.domain.entities.qc_checklist.checklist_pdf_document import (
     PdfRowGroup,
     PdfSection,
     PdfSignatureBlock,
+    PdfSubAnswer,
 )
 from src.domain.repositories.qc_checklist.pdf_export_repository import IPdfExportRepository
 from src.infrastructure.database.models.masters.approval_label_model import ApprovalLabelModel
@@ -30,10 +31,7 @@ from src.infrastructure.database.models.masters.format_model import FormatModel
 from src.infrastructure.database.models.masters.format_stage_mapping_model import (
     FormatStageMappingModel,
 )
-from src.infrastructure.database.models.masters.question_model import (
-    QuestionModel,
-    QuestionSubQuestionModel,
-)
+from src.infrastructure.database.models.masters.question_model import QuestionModel
 from src.infrastructure.database.models.masters.question_option_model import QuestionOptionModel
 from src.infrastructure.database.models.masters.remark_model import RemarkModel
 from src.infrastructure.database.models.masters.section_model import SectionModel
@@ -93,10 +91,10 @@ class PdfExportRepository(IPdfExportRepository):
 
         question_rows = await self._fetch_question_rows(request_number)
         columns = await self._fetch_columns(request_number)
-        sub_questions = await self._fetch_sub_questions(request_number)
+        sub_answers = await self._fetch_sub_answers(request_number)
         signatures = await self._fetch_signatures(request_number)
 
-        sections = self._build_sections(question_rows, columns, sub_questions, signatures)
+        sections = self._build_sections(question_rows, columns, sub_answers, signatures)
 
         # Title: prefer the format's human title; fall back to its name. Shown
         # uppercased like the sample report.
@@ -209,13 +207,8 @@ class PdfExportRepository(IPdfExportRepository):
                 & (QuestionAnswerModel.stage_question_mapping_id == StageQuestionMappingModel.id),
             )
             .outerjoin(
-                QuestionAnswerSubQuestionAnswerModel,
-                QuestionAnswerSubQuestionAnswerModel.question_answer_id == QuestionAnswerModel.id,
-            )
-            .outerjoin(
                 QuestionAnswerHelperModel,
-                QuestionAnswerHelperModel.id
-                == QuestionAnswerSubQuestionAnswerModel.question_answer_helper_id,
+                QuestionAnswerHelperModel.question_answer_id == QuestionAnswerModel.id,
             )
             .outerjoin(selected_opt, selected_opt.id == QuestionAnswerModel.question_option_id)
             .outerjoin(
@@ -273,46 +266,64 @@ class PdfExportRepository(IPdfExportRepository):
         )
         return list((await self._session.execute(stmt)).all())
 
-    async def _fetch_sub_questions(self, request_number: str) -> dict[int, list[str]]:
-        """Map each parent question id to its ordered sub-question titles.
+    async def _fetch_sub_answers(self, request_number: str) -> dict[int, list[Row]]:
+        """Map each parent question's id to its answered sub-questions.
 
-        Sub-questions are display children shown nested under their parent
-        (bulleted, as in the fill UI).
+        Sub-answers are child question_answers rows linked to the parent answer
+        via the self-join. Each carries the sub-question title and its resolved
+        value (chosen option title, else textbox / helper text, else response
+        option title / response_answer), ordered by the join id. Keyed by the
+        PARENT's question_id so the service can attach them to the parent row.
         """
+        parent_qa = aliased(QuestionAnswerModel)
+        child_qa = aliased(QuestionAnswerModel)
         sub_q = aliased(QuestionModel)
+        selected_opt = aliased(QuestionOptionModel)
+        response_opt = aliased(QuestionOptionModel)
+
+        value = func.coalesce(
+            selected_opt.option_title,
+            func.nullif(child_qa.textbox_value, ""),
+            QuestionAnswerHelperModel.text_box_value,
+            response_opt.option_title,
+            func.nullif(child_qa.response_answer, ""),
+            "",
+        )
+
         stmt = (
             select(
-                QuestionSubQuestionModel.question_id.label("parent_id"),
+                parent_qa.question_id.label("parent_question_id"),
                 sub_q.title.label("sub_title"),
+                value.label("sub_value"),
             )
             .select_from(ChecklistRequestModel)
             .join(
                 ChecklistStageModel,
                 ChecklistStageModel.checklist_request_id == ChecklistRequestModel.id,
             )
+            .join(parent_qa, parent_qa.checklist_stage_id == ChecklistStageModel.id)
             .join(
-                FormatStageMappingModel,
-                FormatStageMappingModel.id == ChecklistStageModel.format_stage_mapping_id,
+                QuestionAnswerSubQuestionAnswerModel,
+                QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id == parent_qa.id,
             )
-            .join(
-                StageQuestionMappingModel,
-                StageQuestionMappingModel.format_stage_mapping_id == FormatStageMappingModel.id,
+            .join(child_qa, child_qa.id == QuestionAnswerSubQuestionAnswerModel.question_answer_id)
+            .join(sub_q, sub_q.id == child_qa.question_id)
+            .outerjoin(selected_opt, selected_opt.id == child_qa.question_option_id)
+            .outerjoin(response_opt, response_opt.id == child_qa.response_question_option_id)
+            .outerjoin(
+                QuestionAnswerHelperModel,
+                QuestionAnswerHelperModel.question_answer_id == child_qa.id,
             )
-            .join(
-                QuestionSubQuestionModel,
-                QuestionSubQuestionModel.question_id == StageQuestionMappingModel.question_id,
-            )
-            .join(sub_q, sub_q.id == QuestionSubQuestionModel.sub_question_id)
             .where(
                 ChecklistRequestModel.request_number == request_number,
                 ChecklistRequestModel.is_removed.is_(False),
             )
-            .order_by(QuestionSubQuestionModel.question_id, QuestionSubQuestionModel.id)
+            .order_by(parent_qa.question_id, QuestionAnswerSubQuestionAnswerModel.id)
         )
         rows = (await self._session.execute(stmt)).all()
-        result: dict[int, list[str]] = {}
+        result: dict[int, list[Row]] = {}
         for r in rows:
-            result.setdefault(r.parent_id, []).append(r.sub_title or "")
+            result.setdefault(r.parent_question_id, []).append(r)
         return result
 
     async def _fetch_signatures(self, request_number: str) -> list[Row]:
@@ -367,7 +378,7 @@ class PdfExportRepository(IPdfExportRepository):
         self,
         question_rows: list[Row],
         columns: list[Row],
-        sub_questions: dict[int, list[str]],
+        sub_answers: dict[int, list[Row]],
         signatures: list[Row],
     ) -> list[PdfSection]:
         """Group rows + signatures by stage, then by section within a stage,
@@ -409,7 +420,10 @@ class PdfExportRepository(IPdfExportRepository):
                         "RESPONSE": r.response or "",
                         "AQL_LIMIT": self._format_number(r.aql_limit or ""),
                     },
-                    sub_questions=list(sub_questions.get(r.question_id or 0, [])),
+                    sub_answers=[
+                        PdfSubAnswer(question=sa.sub_title or "", answer=sa.sub_value or "")
+                        for sa in sub_answers.get(r.question_id or 0, [])
+                    ],
                 )
             )
 
@@ -469,10 +483,16 @@ class PdfExportRepository(IPdfExportRepository):
 
     @staticmethod
     def _format_timestamp(value: datetime | None) -> str:
-        """Match the sample's '08-May-2026 15:24' timestamp format."""
+        """Format the signature timestamp in IST, 12-hour with AM/PM
+        (e.g. '08-May-2026 03:24 PM'). Stored timestamps are UTC-aware; a naive
+        value is assumed UTC before converting."""
         if value is None:
             return ""
-        return value.strftime("%d-%b-%Y %H:%M")
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        ist = value.astimezone(timezone(timedelta(hours=5, minutes=30)))
+        # %I is zero-padded 12-hour; strip the leading zero for a cleaner look.
+        return ist.strftime("%d-%b-%Y %I:%M %p").replace(" 0", " ", 1)
 
     @staticmethod
     def _format_number(value: str) -> str:

@@ -314,11 +314,12 @@ class ValidateChecklistService:
                         result.add_error(stage_id, stage_name, qa.question_id, question_title,
                                          "Please select a date!")
 
-            # Phase 6: Sub-question recursive validation
+            # Phase 6: Sub-question recursive validation. Sub-answers are child
+            # QuestionAnswer rows linked to this answer via the self-join.
             if question.has_sub_question:
                 sub_result = await self._session.execute(
-                    select(QuestionAnswerSubQuestionAnswerModel.question_answer_helper_id).where(
-                        QuestionAnswerSubQuestionAnswerModel.question_answer_id == qa.id
+                    select(QuestionAnswerSubQuestionAnswerModel.question_answer_id).where(
+                        QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id == qa.id
                     )
                 )
                 sub_qa_ids = [r[0] for r in sub_result.fetchall() if r[0]]
@@ -519,13 +520,10 @@ class ValidateChecklistService:
         return result.scalar_one_or_none()
 
     async def _get_answer_helpers(self, question_answer_id: int) -> list:
-        """Get helper records for a question answer."""
+        """Get helper records that belong to a question answer."""
         result = await self._session.execute(
-            select(QuestionAnswerHelperModel).join(
-                QuestionAnswerSubQuestionAnswerModel,
-                QuestionAnswerSubQuestionAnswerModel.question_answer_helper_id == QuestionAnswerHelperModel.id
-            ).where(
-                QuestionAnswerSubQuestionAnswerModel.question_answer_id == question_answer_id
+            select(QuestionAnswerHelperModel).where(
+                QuestionAnswerHelperModel.question_answer_id == question_answer_id
             )
         )
         return result.scalars().all()
