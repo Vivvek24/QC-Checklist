@@ -91,6 +91,18 @@ class Settings(BaseSettings):
         description="Base URL for the Darwin AD integrator service",
     )
 
+    # SAP Integration Suite (basic auth)
+    SAP_BASE_URL: str = Field(
+        default="",
+        description="Base URL for the SAP Integration Suite (QAS) HTTP endpoints",
+    )
+    SAP_USERNAME: str = Field(
+        default="", description="SAP Integration Suite client id / username"
+    )
+    SAP_PASSWORD: str = Field(
+        default="", description="SAP Integration Suite client secret / password"
+    )
+
     # Email (Office365 / SMTP)
     SMTP_HOST: str = Field(default="smtp.office365.com", description="SMTP host")
     SMTP_PORT: int = Field(default=25, description="SMTP port")

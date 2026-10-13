@@ -7,6 +7,7 @@ import { LoginPage } from '@features/authentication/pages/LoginPage';
 import { MicrosoftCallbackPage } from '@features/authentication/pages/MicrosoftCallbackPage';
 import { UserListPage } from '@features/user-management/pages/UserListPage';
 import { EmployeeADServicePage } from '@features/service-menu/pages/EmployeeADServicePage';
+import { SapServicePage } from '@features/service-menu/pages/SapServicePage';
 import { RolesPage } from '@features/rbac-admin/pages/RolesPage';
 import { AuditLogsPage } from '@features/rbac-admin/pages/AuditLogsPage';
 import {
@@ -251,6 +252,14 @@ export const AppRouter = () => {
               element={
                 <PrivateRoute menuKey="services">
                   <EmployeeADServicePage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="services/sap"
+              element={
+                <PrivateRoute menuKey="services">
+                  <SapServicePage />
                 </PrivateRoute>
               }
             />

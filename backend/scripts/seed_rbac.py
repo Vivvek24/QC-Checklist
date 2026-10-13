@@ -61,6 +61,7 @@ _PERMISSION_TABLE = [
     ("rbac.update",         "API",   "rbac",           "UPDATE",  "Update Roles & Permissions"),
     # ─── Services ───
     ("services.employee_ad","API",   "services",       "EXECUTE", "Access Employee AD Service"),
+    ("services.sap",        "API",   "services",       "EXECUTE", "Access SAP Integration Service"),
     # ─── Business Unit master ───
     ("business_units.list",   "API", "business_units", "READ",    "List Business Units"),
     ("business_units.create", "API", "business_units", "CREATE",  "Create Business Unit"),

@@ -4,3 +4,4 @@
  */
 
 export { EmployeeADServicePage } from './pages/EmployeeADServicePage';
+export { SapServicePage } from './pages/SapServicePage';

@@ -25,6 +25,7 @@ import type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
 import type { SavedAnswer, SavedSubAnswer } from '../hooks/useValidateTemplateAnswers';
 import { useResolvedColumns } from '../hooks/useResolvedColumns';
 import { useValidateTemplateAnswers } from '../hooks/useValidateTemplateAnswers';
+import { useSetSapAnswers } from '../hooks/useSetSapAnswers';
 import { TemplateCell, type SubAnswerAccess } from './TemplateCell';
 
 export type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
@@ -77,6 +78,12 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
     });
 
     useImperativeHandle(ref, () => ({ validate, getAnswers }));
+
+    // SAP auto-fill: in Basic Details, the editable INSP_LOT question drives a
+    // SAP lookup on blur that fills every other mapped answer from the response.
+    const { sapTriggerKey, fetchFromSap, sapLoading, sapError } = useSetSapAnswers({
+      questions: allQuestions, isBasicDetails, answers, setAnswers,
+    });
 
     // Access object the QUESTION cell uses to read/write each sub-question's
     // answer state (keyed in the hook by parent sqm id + sub question id).
@@ -144,6 +151,10 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
                           canAdd={canAdd}
                           disabled={!canAdd}
                           rowErr={errors[key]}
+                          isSapTrigger={sapTriggerKey != null && key === sapTriggerKey}
+                          sapLoading={sapLoading}
+                          sapError={sapError}
+                          onSapFetch={fetchFromSap}
                           selection={selections[key]}
                           onSelectionChange={(val) => {
                             setSelections((prev) => ({ ...prev, [key]: val }));

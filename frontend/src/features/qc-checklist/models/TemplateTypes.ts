@@ -20,6 +20,9 @@ export interface QuestionAnswerPreview {
    * fillable stage — configured per question in Template Studio. */
   is_editable?: boolean;
   aql_limit?: string;
+  /** SAP field this question maps to (e.g. "INSP_LOT"); matched against SAP
+   * QC_Checklist response keys to auto-fill answers. Null/undefined when unmapped. */
+  sap_field_name?: string | null;
   options: { id: number; label: string }[];
   /** Child questions shown nested under this one (read-only display). */
   sub_questions?: QuestionAnswerPreview[];

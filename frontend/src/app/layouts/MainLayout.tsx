@@ -73,6 +73,7 @@ export const MainLayout = () => {
     { label: 'Workflows', icon: 'pi pi-share-alt', path: '/workflows', section: 'Workflow', menuKey: 'workflows' },
     { label: 'Approval Matrix', icon: 'pi pi-sliders-h', path: '/approval-matrix', section: 'Workflow', menuKey: 'workflows' },
     { label: 'Employee AD', icon: 'pi pi-id-card', path: '/services/employee-ad', section: 'Services', menuKey: 'services' },
+    { label: 'SAP', icon: 'pi pi-server', path: '/services/sap', section: 'Services', menuKey: 'services' },
   ];
 
   const visibleItems = navItems.filter((item) => {

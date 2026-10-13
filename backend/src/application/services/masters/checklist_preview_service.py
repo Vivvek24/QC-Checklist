@@ -34,6 +34,7 @@ from src.domain.repositories.masters.question_repository import IQuestionReposit
 from src.domain.repositories.masters.question_sub_question_repository import (
     IQuestionSubQuestionRepository,
 )
+from src.domain.repositories.masters.sap_field_repository import ISapFieldRepository
 from src.domain.repositories.masters.section_repository import ISectionRepository
 from src.domain.repositories.masters.stage_question_mapping_repository import (
     IStageQuestionMappingRepository,
@@ -108,6 +109,7 @@ class ChecklistPreviewService:
         section_repo: ISectionRepository,
         approval_label_repo: IApprovalLabelRepository,
         column_repo: ITemplateLayoutColumnRepository,
+        sap_field_repo: ISapFieldRepository,
     ) -> None:
         self._format_repo = format_repo
         self._unit_repo = unit_repo
@@ -120,6 +122,15 @@ class ChecklistPreviewService:
         self._section_repo = section_repo
         self._approval_label_repo = approval_label_repo
         self._column_repo = column_repo
+        self._sap_field_repo = sap_field_repo
+        self._sap_field_names: dict[int, str] = {}
+
+    async def _load_sap_field_names(self) -> dict[int, str]:
+        """id -> field_name for all SAP fields, so each question's mapped SAP
+        field name can be surfaced in the preview (used by Create Request to
+        auto-fill answers from a SAP lookup response keyed by field name)."""
+        fields = await self._sap_field_repo.list_all(skip=0, limit=1000)
+        return {f.id: f.field_name for f in fields}
 
     async def _fetch_question_metadata(self, question_ids: list[int]) -> _QuestionMetadata:
         """Bulk-load questions and their options for one batch of question ids."""
@@ -162,6 +173,7 @@ class ChecklistPreviewService:
                     is_declaration_question=False,
                     aql_limit="",
                     sap_field_id=None,
+                    sap_field_name=None,
                     is_editable=True,
                     custom_answers=None,
                     sub_questions=[],
@@ -172,8 +184,8 @@ class ChecklistPreviewService:
             ]
         return sub_questions_map
 
-    @staticmethod
     def _to_question_answer_preview(
+        self,
         sqm: StageQuestionMapping,
         meta: _QuestionMetadata,
         sub_questions_map: dict[int, list[QuestionAnswerPreviewDTO]],
@@ -195,6 +207,9 @@ class ChecklistPreviewService:
             is_declaration_question=sqm.is_declaration_question,
             aql_limit=sqm.aql_limit,
             sap_field_id=sqm.sap_field_id,
+            sap_field_name=(
+                self._sap_field_names.get(sqm.sap_field_id) if sqm.sap_field_id else None
+            ),
             is_editable=sqm.is_editable,
             custom_answers=sqm.custom_answers.value if sqm.custom_answers else None,
             sub_questions=sub_questions_map.get(qid, []),
@@ -264,6 +279,8 @@ class ChecklistPreviewService:
         fmt = await self._format_repo.get_by_id(format_id)
         if fmt is None:
             raise EntityNotFoundError("Format", format_id)
+
+        self._sap_field_names = await self._load_sap_field_names()
 
         unit_name = ""
         if fmt.unit_id:

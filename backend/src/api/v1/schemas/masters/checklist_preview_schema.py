@@ -44,6 +44,7 @@ class QuestionAnswerPreview(BaseModel):
     is_declaration_question: bool = False
     aql_limit: str = ""
     sap_field_id: int | None = None
+    sap_field_name: str | None = None
     is_editable: bool = True
     custom_answers: str | None = None
     sub_questions: list[QuestionAnswerPreview] = []
@@ -67,6 +68,7 @@ class QuestionAnswerPreview(BaseModel):
             is_declaration_question=dto.is_declaration_question,
             aql_limit=dto.aql_limit,
             sap_field_id=dto.sap_field_id,
+            sap_field_name=dto.sap_field_name,
             is_editable=dto.is_editable,
             custom_answers=dto.custom_answers,
             sub_questions=[cls.from_dto(sq) for sq in dto.sub_questions],

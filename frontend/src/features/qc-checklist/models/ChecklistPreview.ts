@@ -23,6 +23,8 @@ export interface QuestionAnswerPreview {
   has_sub_question: boolean;
   is_declaration_question: boolean;
   aql_limit: string;
+  sap_field_name: string | null;
+  is_editable: boolean;
   sub_questions: QuestionAnswerPreview[];
   options: { id: number; label: string }[];
   response_options: { id: number; label: string }[];

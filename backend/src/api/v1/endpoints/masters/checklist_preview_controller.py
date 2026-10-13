@@ -34,6 +34,9 @@ from src.infrastructure.database.repositories.masters.question_repository_impl i
 from src.infrastructure.database.repositories.masters.question_sub_question_repository_impl import (  # noqa: E501
     QuestionSubQuestionRepositoryImpl,
 )
+from src.infrastructure.database.repositories.masters.sap_field_repository_impl import (
+    SapFieldRepositoryImpl,
+)
 from src.infrastructure.database.repositories.masters.section_repository_impl import (
     SectionRepositoryImpl,
 )
@@ -68,6 +71,7 @@ def _get_service(session: AsyncSession = Depends(get_db_session)) -> ChecklistPr
         section_repo=SectionRepositoryImpl(session),
         approval_label_repo=ApprovalLabelRepositoryImpl(session),
         column_repo=TemplateLayoutColumnRepositoryImpl(session),
+        sap_field_repo=SapFieldRepositoryImpl(session),
     )
 
 

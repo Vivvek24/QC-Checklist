@@ -35,6 +35,7 @@ class QuestionAnswerPreviewDTO:
     # its design canvas from this one preview call (no separate
     # stage-question-mappings fetch). The fill-in flow ignores these.
     sap_field_id: int | None
+    sap_field_name: str | None
     is_editable: bool
     custom_answers: str | None
     sub_questions: list["QuestionAnswerPreviewDTO"] = field(default_factory=list)

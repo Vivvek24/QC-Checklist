@@ -45,6 +45,13 @@ interface Props {
   onHelperAdd: () => void;
   /** Sub-question answer state access (used only by the QUESTION cell). */
   subAccess?: SubAnswerAccess;
+  /** True when this row is the SAP-lookup trigger (the editable INSP_LOT
+   * question in Basic Details). On blur of its answer box, the entered value
+   * is used to look up SAP and auto-fill the other mapped answers. */
+  isSapTrigger?: boolean;
+  sapLoading?: boolean;
+  sapError?: string | null;
+  onSapFetch?: () => void;
 }
 
 /** Renders one sub-question's input under its parent, matching its answer_type. */
@@ -121,6 +128,10 @@ export const TemplateCell = ({
   onHelperRemove,
   onHelperAdd,
   subAccess,
+  isSapTrigger = false,
+  sapLoading = false,
+  sapError = null,
+  onSapFetch,
 }: Props) => {
   const key = row.stage_question_mapping_id;
   // Locked either because the whole stage is read-only, or because this
@@ -217,14 +228,23 @@ export const TemplateCell = ({
 
       return (
         <div className="flex flex-column gap-1">
-          <InputText
-            value={answer}
-            className={rowErr?.answer ? 'w-full p-invalid' : 'w-full'}
-            onChange={(e) => onAnswerChange(e.target.value)}
-            disabled={locked}
-            style={{ height: '1.85rem', fontSize: '0.75rem' }}
-          />
+          <div className="flex align-items-center gap-2">
+            <InputText
+              value={answer}
+              className={rowErr?.answer ? 'w-full p-invalid' : 'w-full'}
+              onChange={(e) => onAnswerChange(e.target.value)}
+              // SAP trigger: look up on blur so we hit SAP once the value is
+              // entered, not on every keystroke.
+              onBlur={isSapTrigger && !locked ? onSapFetch : undefined}
+              disabled={locked}
+              style={{ height: '1.85rem', fontSize: '0.75rem' }}
+            />
+            {isSapTrigger && sapLoading && (
+              <i className="pi pi-spin pi-spinner" style={{ fontSize: '0.8rem', color: 'var(--color-primary)' }} />
+            )}
+          </div>
           {rowErr?.answer && <small className="qc-validation-error">{rowErr.answer}</small>}
+          {isSapTrigger && sapError && <small className="qc-validation-error">{sapError}</small>}
           {helperValues.map((val, idx) => {
             const helperErr = helperErrors?.[idx];
             return (
