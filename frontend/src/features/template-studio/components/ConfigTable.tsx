@@ -337,6 +337,18 @@ export const ConfigTable = ({ columns, rows, questionChoices, stageName, ctx, on
                 ))}
               </div>
             )}
+            {/* Per-question approval labels (shown when the question is approvable),
+                rendered as a compact sign-off block under the question. */}
+            {row.isApprovable && (row.approvalLabels?.length ?? 0) > 0 && (
+              <div style={{ marginTop: '0.4rem', paddingTop: '0.35rem', borderTop: '1px dashed #e2e8f0', display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1.1rem' }}>
+                {row.approvalLabels!.map((al) => (
+                  <div key={al.id} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.7rem', color: '#475569' }}>
+                    <span style={{ fontWeight: 600 }}>{al.label}:</span>
+                    <span style={{ display: 'inline-block', minWidth: '6rem', borderBottom: '1px solid #cbd5e1', height: '0.9rem' }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       }

@@ -7,6 +7,9 @@ from sqlalchemy import ColumnElement, Select, func, select
 from src.domain.entities.qc_checklist.question_answer import QuestionAnswer
 from src.domain.repositories.qc_checklist.question_answer_repository import IQuestionAnswerRepository
 from src.infrastructure.database.models.qc_checklist.question_answer_model import QuestionAnswerModel
+from src.infrastructure.database.models.qc_checklist.question_answer_sub_question_answer_model import (  # noqa: E501
+    QuestionAnswerSubQuestionAnswerModel,
+)
 from src.infrastructure.database.repositories.base_repository_impl import SqlAlchemyRepository
 
 
@@ -43,6 +46,35 @@ class QuestionAnswerRepositoryImpl(SqlAlchemyRepository[QuestionAnswer, Question
         ).order_by(QuestionAnswerModel.serial_number)
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
+
+    async def delete_sub_answers_by_parent(self, parent_question_answer_id: int) -> None:
+        link_result = await self._session.execute(
+            select(QuestionAnswerSubQuestionAnswerModel).where(
+                QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id == parent_question_answer_id
+            )
+        )
+        links = link_result.scalars().all()
+        child_ids = [link.question_answer_id for link in links]
+        for link in links:
+            await self._session.delete(link)
+        if child_ids:
+            old_children = await self._session.execute(
+                select(QuestionAnswerModel).where(QuestionAnswerModel.id.in_(child_ids))
+            )
+            for child in old_children.scalars().all():
+                await self._session.delete(child)
+        await self._session.flush()
+
+    async def link_sub_answer(
+        self, parent_question_answer_id: int, child_question_answer_id: int, actor: str
+    ) -> None:
+        self._session.add(QuestionAnswerSubQuestionAnswerModel(
+            question_answer_id=child_question_answer_id,
+            question_answer_parent_id=parent_question_answer_id,
+            created_by=actor,
+            modified_by=actor,
+        ))
+        await self._session.flush()
 
     async def create(self, entity: QuestionAnswer) -> QuestionAnswer:
         model = QuestionAnswerModel(

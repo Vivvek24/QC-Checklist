@@ -19,6 +19,7 @@ class QuestionModel(BaseModel):
     allow_multiple_input: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     has_associated_master: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_calculated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_approvable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     validation_type_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("validation_types.id", ondelete="SET NULL"), nullable=True, index=True

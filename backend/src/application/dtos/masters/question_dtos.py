@@ -17,6 +17,7 @@ class CreateQuestionDTO:
     allow_multiple_input: bool = False
     has_associated_master: bool = False
     is_calculated: bool = False
+    is_approvable: bool = False
     is_active: bool = True
     validation_type_id: int | None = None
     parent_question_id: int | None = None
@@ -36,6 +37,7 @@ class UpdateQuestionDTO:
     allow_multiple_input: bool | None = None
     has_associated_master: bool | None = None
     is_calculated: bool | None = None
+    is_approvable: bool | None = None
     is_active: bool | None = None
     validation_type_id: int | None = None
     parent_question_id: int | None = None
@@ -56,6 +58,7 @@ class QuestionDTO:
     allow_multiple_input: bool
     has_associated_master: bool
     is_calculated: bool
+    is_approvable: bool
     is_active: bool
     validation_type_id: int | None
     parent_question_id: int | None

@@ -8,11 +8,11 @@ the request header) are approved too.
 
 from datetime import UTC, datetime
 
-from src.application.services.qc_checklist.stage_action_base_service import (
-    StageActionBase,
+from src.application.dtos.qc_checklist.stage_action_dtos import (
     SubmitStageRequest,
     SubmitStageResult,
 )
+from src.application.services.qc_checklist.stage_action_base_service import StageActionBase
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import (
     ChecklistRequestModel,
 )
@@ -28,6 +28,10 @@ class ApproveStageService(StageActionBase):
         now = datetime.now(UTC)
         resolved = await self.resolve(request, user_id, role_id, now, authorize=True)
         cr, cs = resolved.request, resolved.stage
+        # Approver's per-question approval remark picks (next unacted label).
+        await self._persist_question_approvals(
+            cs.id, request.question_approvals, user_id, role_id, now
+        )
         return await self._approve(
             cr, cs, user_id, role_id, request.remark_id, request.remark_text, now
         )

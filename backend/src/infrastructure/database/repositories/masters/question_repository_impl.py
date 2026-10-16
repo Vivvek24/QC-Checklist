@@ -55,6 +55,7 @@ class QuestionRepositoryImpl(SqlAlchemyRepository[Question, QuestionModel], IQue
             has_sub_question=entity.has_sub_question, is_validation_required=entity.is_validation_required,
             has_response_option=entity.has_response_option, allow_multiple_input=entity.allow_multiple_input,
             has_associated_master=entity.has_associated_master, is_calculated=entity.is_calculated,
+            is_approvable=entity.is_approvable,
             is_active=entity.is_active, validation_type_id=entity.validation_type_id,
             parent_question_id=entity.parent_question_id,
             master_type=entity.master_type.value if entity.master_type else None,
@@ -71,6 +72,7 @@ class QuestionRepositoryImpl(SqlAlchemyRepository[Question, QuestionModel], IQue
         m.has_sub_question = entity.has_sub_question; m.is_validation_required = entity.is_validation_required
         m.has_response_option = entity.has_response_option; m.allow_multiple_input = entity.allow_multiple_input
         m.has_associated_master = entity.has_associated_master; m.is_calculated = entity.is_calculated
+        m.is_approvable = entity.is_approvable
         m.is_active = entity.is_active; m.validation_type_id = entity.validation_type_id
         m.parent_question_id = entity.parent_question_id
         m.master_type = entity.master_type.value if entity.master_type else None
@@ -114,6 +116,7 @@ class QuestionRepositoryImpl(SqlAlchemyRepository[Question, QuestionModel], IQue
             has_sub_question=m.has_sub_question, is_validation_required=m.is_validation_required,
             has_response_option=m.has_response_option, allow_multiple_input=m.allow_multiple_input,
             has_associated_master=m.has_associated_master, is_calculated=m.is_calculated,
+            is_approvable=m.is_approvable,
             is_active=m.is_active, validation_type_id=m.validation_type_id,
             parent_question_id=m.parent_question_id,
             master_type=MasterType(m.master_type) if m.master_type else None,

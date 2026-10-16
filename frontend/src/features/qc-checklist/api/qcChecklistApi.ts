@@ -39,6 +39,8 @@ export interface SubmitStageExtra {
   format_stage_mapping_id: number;
   checklist_stage_id: number | null;
   answers: SubmitStageAnswerInput[];
+  /** Per-question approval remark picks for this extra stage's questions. */
+  question_approvals?: QuestionApprovalInput[];
 }
 
 export interface SubmitStageRequest {
@@ -52,6 +54,8 @@ export interface SubmitStageRequest {
   answers: SubmitStageAnswerInput[];
   /** Secondary stages persisted + advanced to Pending with this submit. */
   extra_stages?: SubmitStageExtra[];
+  /** Per-question approval remark picks for the primary stage's questions. */
+  question_approvals?: QuestionApprovalInput[];
 }
 
 export interface SubmitStageResponse {
@@ -116,7 +120,9 @@ export interface SavedAnswerResponse {
  * label of a stage, with their remark and date. */
 export interface ApprovalLabelMappingResponse {
   id: number;
-  checklist_stage_id: number;
+  checklist_stage_id: number | null;
+  /** Set for per-question approval rows (null for stage-level rows). */
+  question_answer_id: number | null;
   approval_label_id: number;
   remark_id: number | null;
   user_id: number | null;
@@ -125,6 +131,14 @@ export interface ApprovalLabelMappingResponse {
   remark: string;
   is_show: boolean;
   is_refer_back: boolean;
+}
+
+/** One per-question approval remark pick, sent in the submit payload. */
+export interface QuestionApprovalInput {
+  stage_question_mapping_id: number;
+  approval_label_id: number;
+  remark_id: number | null;
+  remark_text: string;
 }
 
 export const qcChecklistApi = {
@@ -187,6 +201,16 @@ export const qcChecklistApi = {
     const { data } = await apiClient.get<{ items: ApprovalLabelMappingResponse[] }>(
       '/qc-checklist/stage-approval-label-mappings',
       { params: { checklist_stage_id: stageId } }
+    );
+    return data.items;
+  },
+
+  /** All per-question approval-label mappings for a whole request (keyed by
+   * question_answer_id), to pre-fill each question's approval remark. */
+  listQuestionApprovalMappingsForRequest: async (requestId: number): Promise<ApprovalLabelMappingResponse[]> => {
+    const { data } = await apiClient.get<{ items: ApprovalLabelMappingResponse[] }>(
+      '/qc-checklist/stage-approval-label-mappings',
+      { params: { checklist_request_id: requestId } }
     );
     return data.items;
   },

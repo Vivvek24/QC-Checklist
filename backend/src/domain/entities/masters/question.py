@@ -18,6 +18,7 @@ class Question(BaseEntity):
     allow_multiple_input: bool = field(default=False)
     has_associated_master: bool = field(default=False)
     is_calculated: bool = field(default=False)
+    is_approvable: bool = field(default=False)
     is_active: bool = field(default=True)
     validation_type_id: int | None = field(default=None)
     parent_question_id: int | None = field(default=None)

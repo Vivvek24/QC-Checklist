@@ -9,8 +9,10 @@ import { MasterCrudPage } from '../components/MasterCrudPage';
 import { MasterRowActions } from '../components/MasterRowActions';
 import { MasterStatusTag } from '../components/MasterStatusTag';
 import { useQuestions, useCreateQuestion, useUpdateQuestion, useDeleteQuestion } from '../hooks/useQuestions';
+import { useCreateApprovalLabel, useUpdateApprovalLabel, useDeleteApprovalLabel } from '../hooks/useApprovalLabels';
 import { useMasterPermissions } from '../hooks/useMasterPermissions';
 import { questionOptionApi } from '../api/questionOptionApi';
+import { approvalLabelApi } from '../api/approvalLabelApi';
 import type { Question } from '../models/Question';
 
 const defaultFilters: DataTableFilterMeta = {
@@ -27,6 +29,9 @@ export const QuestionPage = () => {
   const createMutation = useCreateQuestion();
   const updateMutation = useUpdateQuestion();
   const deleteMutation = useDeleteQuestion();
+  const createLabel = useCreateApprovalLabel();
+  const updateLabel = useUpdateApprovalLabel();
+  const deleteLabel = useDeleteApprovalLabel();
   const permissions = useMasterPermissions('questions');
 
   const toast = useRef<Toast>(null);
@@ -50,7 +55,7 @@ export const QuestionPage = () => {
   const handleSubmit = async (payload: any) => {
     setFormSaving(true);
     try {
-      const { options, ...questionData } = payload;
+      const { options, approval_labels, ...questionData } = payload;
       let questionId: number;
 
       if (editing) {
@@ -94,6 +99,26 @@ export const QuestionPage = () => {
         }
       }
 
+      // Sync approval labels for this question (mirrors the Stage flow, keyed
+      // by question_id). approval_labels is [] when the question isn't approvable.
+      const labels = (approval_labels ?? []) as { id?: number; label: string; role_ids: number[]; is_active: boolean }[];
+      const keptIds = new Set(labels.filter((l) => l.id).map((l) => l.id!));
+      if (editing) {
+        const serverLabels = await approvalLabelApi.list({ question_id: questionId });
+        for (const sl of serverLabels.items) {
+          if (!keptIds.has(Number(sl.id))) {
+            await deleteLabel.mutateAsync(String(sl.id));
+          }
+        }
+      }
+      for (const lbl of labels) {
+        if (lbl.id) {
+          await updateLabel.mutateAsync({ id: String(lbl.id), request: { label: lbl.label, role_ids: lbl.role_ids, is_active: lbl.is_active } });
+        } else {
+          await createLabel.mutateAsync({ label: lbl.label, question_id: questionId, role_ids: lbl.role_ids, is_active: lbl.is_active });
+        }
+      }
+
       toast.current?.show({ severity: 'success', summary: 'Success', detail: editing ? 'Question updated' : 'Question created', life: 3000 });
       closeDialog();
     } catch (e: any) {
@@ -119,6 +144,7 @@ export const QuestionPage = () => {
           <Column header="Resp. Opt." body={(row: Question) => <BoolBadge value={row.has_response_option} />} style={{ width: '6rem' }} />
           <Column header="Multi" body={(row: Question) => <BoolBadge value={row.allow_multiple_input} />} style={{ width: '5rem' }} />
           <Column header="Calc." body={(row: Question) => <BoolBadge value={row.is_calculated} />} style={{ width: '5rem' }} />
+          <Column header="Approvable" body={(row: Question) => <BoolBadge value={row.is_approvable} />} style={{ width: '6rem' }} />
           <Column header="Status" body={(row: Question) => <MasterStatusTag isActive={row.is_active} />} style={{ width: '7rem' }} />
           {permissions.canModifyRows && (
             <Column header="Actions" body={(row: Question) => (

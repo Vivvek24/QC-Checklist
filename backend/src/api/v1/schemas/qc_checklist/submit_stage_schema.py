@@ -8,10 +8,11 @@ mapping or payload-building there.
 
 from pydantic import BaseModel
 
-from src.application.services.qc_checklist.stage_action_base_service import SubAnswerPayload
-from src.application.services.qc_checklist.submit_stage_service import (
+from src.application.dtos.qc_checklist.stage_action_dtos import (
     ExtraStagePayload,
     QuestionAnswerPayload,
+    QuestionApprovalPayload,
+    SubAnswerPayload,
     SubmitStageRequest,
     SubmitStageResult,
 )
@@ -61,17 +62,35 @@ class AnswerSchema(BaseModel):
         )
 
 
+class QuestionApprovalSchema(BaseModel):
+    """A per-question approval-label remark pick."""
+    stage_question_mapping_id: int
+    approval_label_id: int
+    remark_id: int | None = None
+    remark_text: str = ""
+
+    def to_payload(self) -> QuestionApprovalPayload:
+        return QuestionApprovalPayload(
+            stage_question_mapping_id=self.stage_question_mapping_id,
+            approval_label_id=self.approval_label_id,
+            remark_id=self.remark_id,
+            remark_text=self.remark_text,
+        )
+
+
 class ExtraStageSchema(BaseModel):
     """A secondary stage (e.g. Basic Details) submitted with the primary one."""
     format_stage_mapping_id: int
     checklist_stage_id: int | None = None
     answers: list[AnswerSchema] = []
+    question_approvals: list[QuestionApprovalSchema] = []
 
     def to_payload(self) -> ExtraStagePayload:
         return ExtraStagePayload(
             format_stage_mapping_id=self.format_stage_mapping_id,
             checklist_stage_id=self.checklist_stage_id,
             answers=[a.to_payload() for a in self.answers] if self.answers else None,
+            question_approvals=[q.to_payload() for q in self.question_approvals] if self.question_approvals else None,
         )
 
 
@@ -87,6 +106,8 @@ class SubmitStageRequestSchema(BaseModel):
     # Secondary stages persisted + advanced to Pending together with the
     # primary stage on first submit (used for Basic Details).
     extra_stages: list[ExtraStageSchema] = []
+    # Per-question approval remark picks for the primary stage.
+    question_approvals: list[QuestionApprovalSchema] = []
 
     def to_dto(self) -> SubmitStageRequest:
         return SubmitStageRequest(
@@ -99,6 +120,7 @@ class SubmitStageRequestSchema(BaseModel):
             remark_text=self.remark_text,
             answers=[a.to_payload() for a in self.answers] if self.answers else None,
             extra_stages=[e.to_payload() for e in self.extra_stages] if self.extra_stages else None,
+            question_approvals=[q.to_payload() for q in self.question_approvals] if self.question_approvals else None,
         )
 
 

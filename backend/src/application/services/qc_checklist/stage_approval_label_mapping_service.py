@@ -31,6 +31,10 @@ class StageApprovalLabelMappingService:
         items = await self._repo.list_by_approval_label(approval_label_id)
         return [self._to_dto(i) for i in items]
 
+    async def list_by_checklist_request(self, checklist_request_id: int) -> list[StageApprovalLabelMappingDTO]:
+        items = await self._repo.list_by_checklist_request(checklist_request_id)
+        return [self._to_dto(i) for i in items]
+
     async def get_mapping(self, mapping_id: int) -> StageApprovalLabelMappingDTO:
         return self._to_dto(await self._require(mapping_id))
 
@@ -86,6 +90,7 @@ class StageApprovalLabelMappingService:
         return StageApprovalLabelMappingDTO(
             id=e.id,
             checklist_stage_id=e.checklist_stage_id,
+            question_answer_id=e.question_answer_id,
             approval_label_id=e.approval_label_id,
             remark_id=e.remark_id,
             user_id=e.user_id,

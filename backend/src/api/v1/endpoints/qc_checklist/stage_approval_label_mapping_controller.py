@@ -34,9 +34,16 @@ def _get_service(session: AsyncSession = Depends(get_db_session)) -> StageApprov
 async def list_mappings(
     skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500),
     checklist_stage_id: int | None = Query(None),
+    checklist_request_id: int | None = Query(None),
     approval_label_id: int | None = Query(None),
     service: StageApprovalLabelMappingService = Depends(_get_service),
 ) -> StageApprovalLabelMappingListResponse:
+    if checklist_request_id is not None:
+        items = await service.list_by_checklist_request(checklist_request_id)
+        return StageApprovalLabelMappingListResponse(
+            items=[StageApprovalLabelMappingResponse(**i.__dict__) for i in items],
+            total=len(items), skip=0, limit=len(items),
+        )
     if checklist_stage_id is not None:
         items = await service.list_by_checklist_stage(checklist_stage_id)
         return StageApprovalLabelMappingListResponse(

@@ -30,7 +30,8 @@ class StageApprovalLabelMappingUpdate(BaseModel):
 
 class StageApprovalLabelMappingResponse(BaseModel):
     id: int
-    checklist_stage_id: int
+    checklist_stage_id: int | None
+    question_answer_id: int | None
     approval_label_id: int
     remark_id: int | None
     user_id: int | None

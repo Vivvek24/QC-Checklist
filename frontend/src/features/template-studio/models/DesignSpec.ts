@@ -77,6 +77,10 @@ export interface DesignRow {
   customAnswer?: string | null;
   /** Row-level AQL limit override (AQL format only). */
   aqlLimit?: string;
+  /** Whether the question is approvable (carries its own approval labels). */
+  isApprovable?: boolean;
+  /** Approval labels configured for this question (empty unless approvable). */
+  approvalLabels?: { id: number; label: string }[];
 }
 
 export interface DesignSection {

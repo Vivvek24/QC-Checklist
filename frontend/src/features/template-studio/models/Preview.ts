@@ -25,9 +25,13 @@ export interface QuestionAnswerPreview {
   sap_field_id: number | null;
   is_editable: boolean;
   custom_answers: string | null;
+  /** When true, this question carries its own approval labels. */
+  is_approvable: boolean;
   sub_questions: QuestionAnswerPreview[];
   options: { id: number; label: string }[];
   response_options: { id: number; label: string }[];
+  /** Approval labels configured for this question (empty unless approvable). */
+  approval_labels: { approval_label_id: number; label: string }[];
 }
 
 /** A single Template Studio column, as read for rendering (not editing). */

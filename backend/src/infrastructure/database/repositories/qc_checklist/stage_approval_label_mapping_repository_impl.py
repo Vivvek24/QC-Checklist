@@ -37,6 +37,47 @@ class StageApprovalLabelMappingRepositoryImpl(SqlAlchemyRepository[StageApproval
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
+    async def list_by_checklist_request(self, checklist_request_id: int) -> list[StageApprovalLabelMapping]:
+        """All per-question approval mappings for a request — joins each
+        mapping's question_answer up to its stage's checklist_request_id."""
+        from src.infrastructure.database.models.qc_checklist.checklist_stage_model import (
+            ChecklistStageModel,
+        )
+        from src.infrastructure.database.models.qc_checklist.question_answer_model import (
+            QuestionAnswerModel,
+        )
+        stmt = (
+            select(StageApprovalLabelMappingModel)
+            .join(
+                QuestionAnswerModel,
+                QuestionAnswerModel.id == StageApprovalLabelMappingModel.question_answer_id,
+            )
+            .join(
+                ChecklistStageModel,
+                ChecklistStageModel.id == QuestionAnswerModel.checklist_stage_id,
+            )
+            .where(ChecklistStageModel.checklist_request_id == checklist_request_id)
+            .order_by(StageApprovalLabelMappingModel.id)
+        )
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
+    async def list_by_question_answer(self, question_answer_id: int) -> list[StageApprovalLabelMapping]:
+        stmt = select(StageApprovalLabelMappingModel).where(
+            StageApprovalLabelMappingModel.question_answer_id == question_answer_id
+        ).order_by(StageApprovalLabelMappingModel.id)
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
+    async def list_by_question_answers(self, question_answer_ids: list[int]) -> list[StageApprovalLabelMapping]:
+        if not question_answer_ids:
+            return []
+        stmt = select(StageApprovalLabelMappingModel).where(
+            StageApprovalLabelMappingModel.question_answer_id.in_(question_answer_ids)
+        ).order_by(StageApprovalLabelMappingModel.id)
+        result = await self._session.execute(stmt)
+        return [self._to_entity(m) for m in result.scalars().all()]
+
     async def list_by_approval_label(self, approval_label_id: int) -> list[StageApprovalLabelMapping]:
         stmt = select(StageApprovalLabelMappingModel).where(
             StageApprovalLabelMappingModel.approval_label_id == approval_label_id
@@ -47,6 +88,7 @@ class StageApprovalLabelMappingRepositoryImpl(SqlAlchemyRepository[StageApproval
     async def create(self, entity: StageApprovalLabelMapping) -> StageApprovalLabelMapping:
         model = StageApprovalLabelMappingModel(
             checklist_stage_id=entity.checklist_stage_id,
+            question_answer_id=entity.question_answer_id,
             approval_label_id=entity.approval_label_id,
             remark_id=entity.remark_id,
             user_id=entity.user_id,
@@ -65,6 +107,7 @@ class StageApprovalLabelMappingRepositoryImpl(SqlAlchemyRepository[StageApproval
     async def update(self, entity: StageApprovalLabelMapping) -> StageApprovalLabelMapping:
         model = await self._require_model(entity.id)
         model.checklist_stage_id = entity.checklist_stage_id
+        model.question_answer_id = entity.question_answer_id
         model.approval_label_id = entity.approval_label_id
         model.remark_id = entity.remark_id
         model.user_id = entity.user_id
@@ -83,6 +126,7 @@ class StageApprovalLabelMappingRepositoryImpl(SqlAlchemyRepository[StageApproval
         return StageApprovalLabelMapping(
             id=model.id,
             checklist_stage_id=model.checklist_stage_id,
+            question_answer_id=model.question_answer_id,
             approval_label_id=model.approval_label_id,
             remark_id=model.remark_id,
             user_id=model.user_id,

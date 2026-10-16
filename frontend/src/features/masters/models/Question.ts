@@ -28,6 +28,7 @@ export interface Question extends MasterRecord {
   allow_multiple_input: boolean;
   has_associated_master: boolean;
   is_calculated: boolean;
+  is_approvable: boolean;
   validation_type_id: number | null;
   master_type: string | null;
   parent_question_id: number | null;
@@ -45,6 +46,7 @@ export interface CreateQuestionRequest {
   allow_multiple_input: boolean;
   has_associated_master: boolean;
   is_calculated: boolean;
+  is_approvable: boolean;
   is_active: boolean;
   validation_type_id: number | null;
   master_type: string | null;

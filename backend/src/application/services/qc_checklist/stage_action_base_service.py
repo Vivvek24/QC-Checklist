@@ -21,10 +21,30 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.application.dtos.qc_checklist.stage_action_dtos import (
+    QuestionAnswerPayload,
+    QuestionApprovalPayload,
+    SubAnswerPayload,
+    SubmitStageRequest,
+    SubmitStageResult,
+)
 from src.application.services.qc_checklist.request_creation_service import RequestCreationService
 from src.application.services.qc_checklist.validate_checklist_service import (
     ValidateChecklistService,
     ValidationResult,
+)
+from src.domain.entities.qc_checklist.question_answer import QuestionAnswer
+from src.domain.entities.qc_checklist.stage_approval_label_mapping import (
+    StageApprovalLabelMapping,
+)
+from src.infrastructure.database.repositories.qc_checklist.question_answer_helper_repository_impl import (  # noqa: E501
+    QuestionAnswerHelperRepositoryImpl,
+)
+from src.infrastructure.database.repositories.qc_checklist.question_answer_repository_impl import (
+    QuestionAnswerRepositoryImpl,
+)
+from src.infrastructure.database.repositories.qc_checklist.stage_approval_label_mapping_repository_impl import (  # noqa: E501
+    StageApprovalLabelMappingRepositoryImpl,
 )
 from src.domain.exceptions.domain_exceptions import BusinessRuleViolationError, EntityNotFoundError
 from src.infrastructure.database.models.masters.approval_label_model import (
@@ -41,14 +61,8 @@ from src.infrastructure.database.models.qc_checklist.checklist_request_model imp
 from src.infrastructure.database.models.qc_checklist.checklist_stage_model import (
     ChecklistStageModel,
 )
-from src.infrastructure.database.models.qc_checklist.question_answer_helper_model import (
-    QuestionAnswerHelperModel,
-)
 from src.infrastructure.database.models.qc_checklist.question_answer_model import (
     QuestionAnswerModel,
-)
-from src.infrastructure.database.models.qc_checklist.question_answer_sub_question_answer_model import (  # noqa: E501
-    QuestionAnswerSubQuestionAnswerModel,
 )
 from src.infrastructure.database.models.qc_checklist.stage_approval_label_mapping_model import (
     StageApprovalLabelMappingModel,
@@ -58,65 +72,6 @@ from src.infrastructure.security.auth_manager import AuthenticationError
 
 VALID_ACTIONS = ("submit", "save_draft", "approve", "refer_back")
 BASIC_DETAILS = "Basic Details"
-
-
-@dataclass
-class SubAnswerPayload:
-    """A sub-question's answer. Persisted as its own QuestionAnswer row and
-    linked to the parent answer via question_answer_sub_question_answers."""
-    question_id: int
-    textbox_value: str = ""
-    question_option_id: int | None = None
-    response_question_option_id: int | None = None
-    response_answer: str = ""
-
-
-@dataclass
-class QuestionAnswerPayload:
-    """Payload for a single question answer."""
-    stage_question_mapping_id: int
-    question_id: int
-    textbox_value: str = ""
-    question_option_id: int | None = None
-    response_question_option_id: int | None = None
-    response_answer: str = ""
-    product_id: int | None = None
-    date_time: str | None = None
-    helpers: list[str] | None = None
-    sub_answers: list[SubAnswerPayload] | None = None
-
-
-@dataclass
-class ExtraStagePayload:
-    """A secondary stage submitted alongside the primary one (e.g. Basic
-    Details, which has no Submit button of its own)."""
-    format_stage_mapping_id: int
-    checklist_stage_id: int | None = None
-    answers: list[QuestionAnswerPayload] | None = None
-
-
-@dataclass
-class SubmitStageRequest:
-    """Input for any stage action."""
-    checklist_request_id: int | None  # None for first-time creation
-    format_id: int
-    checklist_stage_id: int | None  # None for first-time creation
-    format_stage_mapping_id: int
-    action: str  # submit, save_draft, approve, refer_back
-    remark_id: int | None = None
-    remark_text: str = ""
-    answers: list[QuestionAnswerPayload] | None = None
-    extra_stages: list[ExtraStagePayload] | None = None
-
-
-@dataclass
-class SubmitStageResult:
-    """Output after a stage action."""
-    success: bool
-    checklist_request_id: int
-    checklist_stage_id: int
-    new_status: str
-    message: str
 
 
 @dataclass
@@ -135,6 +90,11 @@ class StageActionBase:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._request_creation = RequestCreationService(session)
+        # Row inserts go through their repos (which own the flush), so the
+        # service never adds/flushes raw ORM for new rows itself.
+        self._qa_repo = QuestionAnswerRepositoryImpl(session)
+        self._salm_repo = StageApprovalLabelMappingRepositoryImpl(session)
+        self._helper_repo = QuestionAnswerHelperRepositoryImpl(session)
 
     async def execute(
         self, request: SubmitStageRequest, user_id: int, role_id: int | None,
@@ -300,7 +260,7 @@ class StageActionBase:
         label = al_result.scalar_one_or_none()
         if not label:
             return
-        self._session.add(StageApprovalLabelMappingModel(
+        await self._salm_repo.create(StageApprovalLabelMapping(
             checklist_stage_id=cs.id,
             approval_label_id=label.id,
             remark_id=remark_id,
@@ -312,9 +272,83 @@ class StageActionBase:
             is_refer_back=is_refer_back,
             created_by=str(user_id),
             modified_by=str(user_id),
-            created_date=now,
-            modified_date=now,
         ))
+
+    async def _role_can_act_on_label(self, approval_label_id: int, role_id: int | None) -> bool:
+        """Whether the caller's role is configured on a given approval label.
+        A label with no roles configured is open to anyone (mirrors the stage
+        gate's 'no roles → no restriction')."""
+        result = await self._session.execute(
+            select(ApprovalLabelUserRoleModel.role_id).where(
+                ApprovalLabelUserRoleModel.approval_label_id == approval_label_id
+            )
+        )
+        allowed = {r[0] for r in result.fetchall()}
+        if not allowed:
+            return True
+        return role_id is not None and role_id in allowed
+
+    async def _persist_question_approvals(
+        self, stage_id: int, approvals: list[QuestionApprovalPayload] | None,
+        user_id: int, role_id: int | None, now: datetime,
+    ) -> None:
+        """Record per-question approval-label remark picks (same mechanics as a
+        stage approval, but keyed to the filled question's question_answer_id).
+
+        For each pick: resolve the question_answer, enforce the label's role
+        gate, then fill the first unacted mapping for that (question_answer,
+        label) — creating one if none exists."""
+        if not approvals:
+            return
+        for pick in approvals:
+            # Only the role(s) configured on this label may act on it.
+            if not await self._role_can_act_on_label(pick.approval_label_id, role_id):
+                continue
+
+            qa_result = await self._session.execute(
+                select(QuestionAnswerModel.id).where(
+                    QuestionAnswerModel.checklist_stage_id == stage_id,
+                    QuestionAnswerModel.stage_question_mapping_id == pick.stage_question_mapping_id,
+                )
+            )
+            qa_id = qa_result.scalar_one_or_none()
+            if qa_id is None:
+                continue
+
+            # First unacted mapping for this question+label (if pre-created),
+            # otherwise create one.
+            mapping_result = await self._session.execute(
+                select(StageApprovalLabelMappingModel).where(
+                    StageApprovalLabelMappingModel.question_answer_id == qa_id,
+                    StageApprovalLabelMappingModel.approval_label_id == pick.approval_label_id,
+                    StageApprovalLabelMappingModel.date_of_action.is_(None),
+                ).order_by(StageApprovalLabelMappingModel.id).limit(1)
+            )
+            mapping = mapping_result.scalar_one_or_none()
+            if mapping:
+                mapping.user_id = user_id
+                mapping.role_id = role_id
+                mapping.remark_id = pick.remark_id
+                mapping.remark = pick.remark_text or ""
+                mapping.date_of_action = now
+                mapping.is_show = True
+                mapping.modified_by = str(user_id)
+                mapping.modified_date = now
+            else:
+                await self._salm_repo.create(StageApprovalLabelMapping(
+                    checklist_stage_id=None,
+                    question_answer_id=qa_id,
+                    approval_label_id=pick.approval_label_id,
+                    remark_id=pick.remark_id,
+                    user_id=user_id,
+                    role_id=role_id,
+                    date_of_action=now,
+                    remark=pick.remark_text or "",
+                    is_show=True,
+                    is_refer_back=False,
+                    created_by=str(user_id),
+                    modified_by=str(user_id),
+                ))
 
     async def _reset_refer_back_mappings(self, cs: ChecklistStageModel) -> None:
         """Clear the approver's refer-back action(s) so the approval chain
@@ -422,7 +456,9 @@ class StageActionBase:
                 existing.modified_date = now
                 qa_id = existing.id
             else:
-                qa = QuestionAnswerModel(
+                # Insert via the repo so the flush (and id assignment) lives in
+                # the repository layer, not the service.
+                created = await self._qa_repo.create(QuestionAnswer(
                     checklist_stage_id=stage_id,
                     question_id=ans.question_id,
                     stage_question_mapping_id=ans.stage_question_mapping_id,
@@ -432,47 +468,19 @@ class StageActionBase:
                     response_answer=ans.response_answer,
                     product_id=ans.product_id,
                     has_helper=bool(ans.helpers),
-                    serial_number=0,
-                    sub_answer_serial_no="",
-                    test_title="",
-                    sample_vails="",
-                    answer_total_vails=0,
-                    issuer_name="",
-                    is_issued_vails=False,
-                    has_vails=False,
-                    comma_separated_name="",
                     created_by=str(user_id),
                     modified_by=str(user_id),
-                    created_date=now,
-                    modified_date=now,
-                )
-                self._session.add(qa)
-                await self._session.flush()
-                qa_id = qa.id
+                ))
+                qa_id = created.id
 
-            # Helper ("+ Add") free-text values belong to this answer.
+            # Helper ("+ Add") free-text values belong to this answer — the repo
+            # replaces them (delete + insert) and owns the flush.
             if ans.helpers:
-                existing_helpers = await self._session.execute(
-                    select(QuestionAnswerHelperModel).where(
-                        QuestionAnswerHelperModel.question_answer_id == qa_id
-                    )
-                )
-                for eh in existing_helpers.scalars().all():
-                    await self._session.delete(eh)
-                for helper_text in ans.helpers:
-                    if helper_text.strip():
-                        self._session.add(QuestionAnswerHelperModel(
-                            question_answer_id=qa_id,
-                            text_box_value=helper_text,
-                            created_by=str(user_id),
-                            modified_by=str(user_id),
-                            created_date=now,
-                            modified_date=now,
-                        ))
+                await self._helper_repo.replace_for_answer(qa_id, ans.helpers, str(user_id))
 
             # Sub-question answers: each is its own QuestionAnswer row, linked to
             # the parent answer via the self-join. Rewritten each save.
-            await self._persist_sub_answers(stage_id, qa_id, ans.sub_answers, user_id, now)
+            await self._persist_sub_answers(stage_id, qa_id, ans.sub_answers, user_id)
 
     async def _persist_sub_answers(
         self,
@@ -480,34 +488,18 @@ class StageActionBase:
         parent_qa_id: int,
         sub_answers: list[SubAnswerPayload] | None,
         user_id: int,
-        now: datetime,
     ) -> None:
         """Persist a parent answer's sub-question answers as child QuestionAnswer
         rows, linked via question_answer_sub_question_answers. Rewritten on each
-        save: the previous children + links for this parent are removed first."""
-        # Remove the previous links + their child answer rows for this parent.
-        link_result = await self._session.execute(
-            select(QuestionAnswerSubQuestionAnswerModel).where(
-                QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id == parent_qa_id
-            )
-        )
-        links = link_result.scalars().all()
-        child_ids = [link.question_answer_id for link in links]
-        for link in links:
-            await self._session.delete(link)
-        if child_ids:
-            old_children = await self._session.execute(
-                select(QuestionAnswerModel).where(QuestionAnswerModel.id.in_(child_ids))
-            )
-            for child in old_children.scalars().all():
-                await self._session.delete(child)
-        await self._session.flush()
+        save: the previous children + links for this parent are removed first.
+        All persistence (delete / insert / link + flush) lives in the repo."""
+        await self._qa_repo.delete_sub_answers_by_parent(parent_qa_id)
 
         if not sub_answers:
             return
 
         for sub in sub_answers:
-            child = QuestionAnswerModel(
+            child = await self._qa_repo.create(QuestionAnswer(
                 checklist_stage_id=stage_id,
                 question_id=sub.question_id,
                 stage_question_mapping_id=None,
@@ -515,32 +507,10 @@ class StageActionBase:
                 question_option_id=sub.question_option_id,
                 response_question_option_id=sub.response_question_option_id,
                 response_answer=sub.response_answer,
-                product_id=None,
-                has_helper=False,
-                serial_number=0,
-                sub_answer_serial_no="",
-                test_title="",
-                sample_vails="",
-                answer_total_vails=0,
-                issuer_name="",
-                is_issued_vails=False,
-                has_vails=False,
-                comma_separated_name="",
                 created_by=str(user_id),
                 modified_by=str(user_id),
-                created_date=now,
-                modified_date=now,
-            )
-            self._session.add(child)
-            await self._session.flush()
-            self._session.add(QuestionAnswerSubQuestionAnswerModel(
-                question_answer_id=child.id,
-                question_answer_parent_id=parent_qa_id,
-                created_by=str(user_id),
-                modified_by=str(user_id),
-                created_date=now,
-                modified_date=now,
             ))
+            await self._qa_repo.link_sub_answer(parent_qa_id, child.id, str(user_id))
 
     # ── status_format ──────────────────────────────────────────────────────────
 

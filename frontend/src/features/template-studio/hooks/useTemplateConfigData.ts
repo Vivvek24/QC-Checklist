@@ -32,6 +32,8 @@ const toDesignRow = (q: QuestionAnswerPreview): DesignRow => ({
   isDeclaration: q.is_declaration_question,
   customAnswer: q.custom_answers,
   aqlLimit: q.aql_limit,
+  isApprovable: q.is_approvable,
+  approvalLabels: (q.approval_labels ?? []).map((a) => ({ id: a.approval_label_id, label: a.label })),
 });
 
 /** Build DesignColumns from a list of columns for one scope. */

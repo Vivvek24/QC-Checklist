@@ -23,9 +23,13 @@ export interface QuestionAnswerPreview {
   /** SAP field this question maps to (e.g. "INSP_LOT"); matched against SAP
    * QC_Checklist response keys to auto-fill answers. Null/undefined when unmapped. */
   sap_field_name?: string | null;
+  /** True when this question carries its own approval labels. */
+  is_approvable?: boolean;
   options: { id: number; label: string }[];
   /** Child questions shown nested under this one (read-only display). */
   sub_questions?: QuestionAnswerPreview[];
+  /** Approval labels configured for this question (empty/undefined unless approvable). */
+  approval_labels?: { approval_label_id: number; label: string; role_ids?: number[] }[];
 }
 
 export interface TemplateSubAnswer {
@@ -49,4 +53,7 @@ export interface TemplateAnswer {
 export interface TemplateDrivenSnipHandle {
   validate: () => boolean;
   getAnswers: () => TemplateAnswer[];
+  /** Per-question approval remark picks (empty unless the stage has approvable
+   * questions and the user acted on them). */
+  getQuestionApprovals?: () => import('../api/qcChecklistApi').QuestionApprovalInput[];
 }

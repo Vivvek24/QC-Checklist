@@ -38,15 +38,23 @@ class QuestionAnswerPreviewDTO:
     sap_field_name: str | None
     is_editable: bool
     custom_answers: str | None
+    # When the question is approvable, the approval labels configured for it
+    # (same shape as a stage's labels) so the grid can render a per-question
+    # approval block under it.
+    is_approvable: bool = False
     sub_questions: list["QuestionAnswerPreviewDTO"] = field(default_factory=list)
     options: list[QuestionOptionPreviewDTO] = field(default_factory=list)
     response_options: list[QuestionOptionPreviewDTO] = field(default_factory=list)
+    approval_labels: list["ApprovalLabelPreviewDTO"] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ApprovalLabelPreviewDTO:
     approval_label_id: int
     label: str
+    # Roles configured to act on this label (used by the fill grid to gate who
+    # can pick the per-question remark). Empty for stage labels (not needed there).
+    role_ids: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

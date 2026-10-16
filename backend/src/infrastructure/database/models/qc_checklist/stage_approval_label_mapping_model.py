@@ -12,8 +12,14 @@ class StageApprovalLabelMappingModel(BaseModel):
     __tablename__ = "stage_approval_label_mappings"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
-    checklist_stage_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("checklist_stages.id", ondelete="CASCADE"), nullable=False, index=True
+    # A mapping belongs to EITHER a checklist stage OR a filled question
+    # (question_answer) — one set, the other NULL. Mirrors the approval_labels
+    # stage/question split so per-question approvals reuse this same table.
+    checklist_stage_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("checklist_stages.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    question_answer_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("question_answers.id", ondelete="CASCADE"), nullable=True, index=True
     )
     approval_label_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("approval_labels.id", ondelete="CASCADE"), nullable=False, index=True

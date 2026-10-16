@@ -28,7 +28,7 @@ export const CreateRequestPage = () => {
     toastRef, requestNumber, formatOptions, formatsLoading, selectedFormatId,
     canInitiate, userNameById, onFormatChange, goToDashboard,
     loading, preview, isContinuation, expandedStages, stageColumns,
-    savedAnswersByFsm, savedSubAnswersByFsm, approvalMappingsByFsm, submitting, snipRefs, approvalRefs,
+    savedAnswersByFsm, savedSubAnswersByFsm, approvalMappingsByFsm, questionApprovalMappings, sqmByQuestionAnswerId, submitting, snipRefs, approvalRefs,
     toggleStage, handleSubmit, handleSaveAsDraft, handleApprove, handleReferBack,
   } = useCreateRequestPage();
 
@@ -156,6 +156,9 @@ export const CreateRequestPage = () => {
                           stageStatus={stage.status}
                           savedAnswers={savedAnswersByFsm[fsmId]}
                           savedSubAnswers={savedSubAnswersByFsm[fsmId]}
+                          questionApprovalMappings={questionApprovalMappings}
+                          sqmByQuestionAnswerId={sqmByQuestionAnswerId}
+                          userNameById={userNameById}
                         />
                       )}
 

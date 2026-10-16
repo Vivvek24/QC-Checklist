@@ -52,6 +52,26 @@ class QuestionAnswerHelperRepositoryImpl(SqlAlchemyRepository[QuestionAnswerHelp
         await self._session.flush()
         return self._to_entity(model)
 
+    async def replace_for_answer(
+        self, question_answer_id: int, texts: list[str], actor: str
+    ) -> None:
+        existing = await self._session.execute(
+            select(QuestionAnswerHelperModel).where(
+                QuestionAnswerHelperModel.question_answer_id == question_answer_id
+            )
+        )
+        for row in existing.scalars().all():
+            await self._session.delete(row)
+        for text in texts:
+            if text.strip():
+                self._session.add(QuestionAnswerHelperModel(
+                    question_answer_id=question_answer_id,
+                    text_box_value=text,
+                    created_by=actor,
+                    modified_by=actor,
+                ))
+        await self._session.flush()
+
     async def update(self, entity: QuestionAnswerHelper) -> QuestionAnswerHelper:
         model = await self._require_model(entity.id)
         model.text_box_value = entity.text_box_value

@@ -19,14 +19,12 @@
  */
 
 import { forwardRef, useImperativeHandle } from 'react';
-import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 import type { ChecklistStagePreview, ColumnPreview, QuestionAnswerPreview, SectionPreview } from '../models/ChecklistPreview';
 import type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
 import type { SavedAnswer, SavedSubAnswer } from '../hooks/useValidateTemplateAnswers';
-import { useResolvedColumns } from '../hooks/useResolvedColumns';
-import { useValidateTemplateAnswers } from '../hooks/useValidateTemplateAnswers';
-import { useSetSapAnswers } from '../hooks/useSetSapAnswers';
-import { TemplateCell, type SubAnswerAccess } from './TemplateCell';
+import type { ApprovalLabelMappingResponse } from '../api/qcChecklistApi';
+import { useTemplateDrivenSnip } from '../hooks/useTemplateDrivenSnip';
+import { TemplateCell } from './TemplateCell';
 
 export type { TemplateDrivenSnipHandle } from '../models/TemplateTypes';
 
@@ -42,59 +40,32 @@ interface Props {
   savedAnswers?: Record<number, SavedAnswer>;
   /** Pre-loaded saved sub-answers keyed by parent question_id. */
   savedSubAnswers?: Record<number, SavedSubAnswer[]>;
+  /** Loaded per-question approval mappings for this request (keyed by question_answer_id). */
+  questionApprovalMappings?: ApprovalLabelMappingResponse[];
+  /** question_answer_id -> stage_question_mapping_id, from the loaded answers. */
+  sqmByQuestionAnswerId?: Record<number, number>;
+  /** Resolve an acting user's id to a display name (for acted approval rows). */
+  userNameById?: (userId: number) => string;
 }
 
 export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
-  ({ questions, columns, stageName, stageStatus, sections = [], hasSection = false, savedAnswers, savedSubAnswers }, ref) => {
-    const isBasicDetails = stageName === BASIC_DETAILS_STAGE;
-    // Editable only while the stage is still fillable; once submitted
-    // (Pending) or approved it's view-only until the approver acts.
-    const canAdd = stageStatus === 'Initial' || stageStatus === 'Draft' || stageStatus === 'ReferBack';
-
-    // Flatten every question the stage carries — flat questions or all section
-    // questions — so the answer hook validates/returns the whole stage.
-    const allQuestions: QuestionAnswerPreview[] = hasSection
-      ? sections.flatMap((s) => s.questions)
-      : questions;
-
-    // Column-type flags are derived from the union of stage + section columns,
-    // so option/answer/response validation applies regardless of where the
-    // columns live.
-    const unionColumns = hasSection ? sections.flatMap((s) => s.columns) : columns;
-    const { hasOptionColumn, hasAnswerColumn, hasResponseColumn } = useResolvedColumns(unionColumns, isBasicDetails);
-
+  ({ questions, columns, stageName, stageStatus, sections = [], hasSection = false, savedAnswers, savedSubAnswers, questionApprovalMappings, sqmByQuestionAnswerId, userNameById }, ref) => {
     const {
+      allQuestions, canAdd, isBasicDetails,
       selections, setSelections,
       answers, setAnswers,
       responses, setResponses,
       helpers, setHelpers,
-      subSelections, subAnswers, subResponses,
-      setSubSelection, setSubAnswer, setSubResponse,
       errors, helperErrors, clearError, clearHelperError,
-      validate, getAnswers,
-    } = useValidateTemplateAnswers({
-      questions: allQuestions, hasOptionColumn, hasAnswerColumn, hasResponseColumn,
-      isBasicDetails, savedAnswers, savedSubAnswers,
+      sapTriggerKey, fetchFromSap, sapLoading, sapError,
+      subAccess, approvalAccess,
+      validateAll, getAnswers, getQuestionApprovals,
+    } = useTemplateDrivenSnip({
+      questions, columns, stageName, stageStatus, sections, hasSection,
+      savedAnswers, savedSubAnswers, questionApprovalMappings, sqmByQuestionAnswerId, userNameById,
     });
 
-    useImperativeHandle(ref, () => ({ validate, getAnswers }));
-
-    // SAP auto-fill: in Basic Details, the editable INSP_LOT question drives a
-    // SAP lookup on blur that fills every other mapped answer from the response.
-    const { sapTriggerKey, fetchFromSap, sapLoading, sapError } = useSetSapAnswers({
-      questions: allQuestions, isBasicDetails, answers, setAnswers,
-    });
-
-    // Access object the QUESTION cell uses to read/write each sub-question's
-    // answer state (keyed in the hook by parent sqm id + sub question id).
-    const subAccess: SubAnswerAccess = {
-      getSelection: (p, s) => subSelections[`${p}:${s}`],
-      getAnswer: (p, s) => subAnswers[`${p}:${s}`] || '',
-      getResponse: (p, s) => subResponses[`${p}:${s}`] || '',
-      setSelection: setSubSelection,
-      setAnswer: setSubAnswer,
-      setResponse: setSubResponse,
-    };
+    useImperativeHandle(ref, () => ({ validate: validateAll, getAnswers, getQuestionApprovals }));
 
     /** Render one table for a given set of columns + question rows. */
     const renderTable = (cols: ColumnPreview[], rows: QuestionAnswerPreview[], keyPrefix: string) => {
@@ -189,6 +160,7 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
                           }
                           onHelperAdd={() => setHelpers((prev) => ({ ...prev, [key]: [...(prev[key] || []), ''] }))}
                           subAccess={subAccess}
+                          approvalAccess={approvalAccess}
                         />
                       </td>
                     ))}

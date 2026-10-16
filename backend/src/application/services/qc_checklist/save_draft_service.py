@@ -6,11 +6,11 @@ is no validation or role gate here (that applies to submit/approve/refer-back).
 
 from datetime import UTC, datetime
 
-from src.application.services.qc_checklist.stage_action_base_service import (
-    StageActionBase,
+from src.application.dtos.qc_checklist.stage_action_dtos import (
     SubmitStageRequest,
     SubmitStageResult,
 )
+from src.application.services.qc_checklist.stage_action_base_service import StageActionBase
 
 
 class SaveDraftService(StageActionBase):

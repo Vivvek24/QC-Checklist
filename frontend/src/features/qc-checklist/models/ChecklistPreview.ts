@@ -25,14 +25,20 @@ export interface QuestionAnswerPreview {
   aql_limit: string;
   sap_field_name: string | null;
   is_editable: boolean;
+  /** When true, this question carries its own approval labels (approval_labels). */
+  is_approvable: boolean;
   sub_questions: QuestionAnswerPreview[];
   options: { id: number; label: string }[];
   response_options: { id: number; label: string }[];
+  /** Approval labels configured for this question (empty unless is_approvable). */
+  approval_labels: ApprovalLabelPreview[];
 }
 
 export interface ApprovalLabelPreview {
   approval_label_id: number;
   label: string;
+  /** Roles allowed to act on this label (gates who can pick the remark). */
+  role_ids?: number[];
 }
 
 /** A single Template Studio column, as read for rendering (not editing). */

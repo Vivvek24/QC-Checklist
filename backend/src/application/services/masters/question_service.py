@@ -29,6 +29,7 @@ class QuestionService:
             has_sub_question=dto.has_sub_question, is_validation_required=dto.is_validation_required,
             has_response_option=dto.has_response_option, allow_multiple_input=dto.allow_multiple_input,
             has_associated_master=dto.has_associated_master, is_calculated=dto.is_calculated,
+            is_approvable=dto.is_approvable,
             is_active=dto.is_active, validation_type_id=dto.validation_type_id,
             parent_question_id=dto.parent_question_id, master_type=dto.master_type,
             sub_question_ids=dto.sub_question_ids,
@@ -51,6 +52,7 @@ class QuestionService:
         if dto.allow_multiple_input is not None: q.allow_multiple_input = dto.allow_multiple_input
         if dto.has_associated_master is not None: q.has_associated_master = dto.has_associated_master
         if dto.is_calculated is not None: q.is_calculated = dto.is_calculated
+        if dto.is_approvable is not None: q.is_approvable = dto.is_approvable
         if dto.is_active is not None: q.is_active = dto.is_active
         if dto.validation_type_id is not None: q.validation_type_id = dto.validation_type_id
         if dto.parent_question_id is not None: q.parent_question_id = dto.parent_question_id
@@ -75,6 +77,7 @@ class QuestionService:
             has_sub_question=q.has_sub_question, is_validation_required=q.is_validation_required,
             has_response_option=q.has_response_option, allow_multiple_input=q.allow_multiple_input,
             has_associated_master=q.has_associated_master, is_calculated=q.is_calculated,
+            is_approvable=q.is_approvable,
             is_active=q.is_active, validation_type_id=q.validation_type_id,
             parent_question_id=q.parent_question_id, master_type=q.master_type,
             sub_question_ids=q.sub_question_ids,

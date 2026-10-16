@@ -79,9 +79,9 @@ export const ReconcilationSheetSnip = forwardRef<ReconcilationSheetSnipHandle, P
     const canEdit = stageStatus === 'Initial' || stageStatus === 'Draft' || stageStatus === 'ReferBack' || stageStatus === 'Saved';
 
     const [selections, setSelections] = useState<Record<number, any>>({});
-    const [answers, setAnswers] = useState<Record<number, string>>({});
+    const [answers, setAnswers] = useState<Record<number | string, string>>({});
     const [productSelections, setProductSelections] = useState<Record<number, number | null>>({});
-    const [dateSelections, setDateSelections] = useState<Record<number, Date | null>>({});
+    const [dateSelections, setDateSelections] = useState<Record<number | string, Date | null>>({});
     const [helpers, setHelpers] = useState<Record<number, string[]>>({});
     const [errors, setErrors] = useState<Record<number, string>>({});
 
@@ -314,8 +314,6 @@ export const ReconcilationSheetSnip = forwardRef<ReconcilationSheetSnipHandle, P
 
     // ─── Grid 2: Sample Details (non-Basic-Details stages) ───
     // Columns: Sr No | Tests | Sample Vails | Issued By Dates | Received By Dates
-    const stageQuestions = hasSection ? sections.flatMap((s) => s.questions) : questions;
-
     return (
       <div style={{ overflow: 'auto' }}>
         {hasSection && sections.map((section) => (
@@ -333,7 +331,6 @@ export const ReconcilationSheetSnip = forwardRef<ReconcilationSheetSnipHandle, P
               dateSelections={dateSelections}
               setDateSelections={setDateSelections}
               canEdit={canEdit}
-              errors={errors}
               setErrors={setErrors}
             />
           </div>
@@ -346,7 +343,6 @@ export const ReconcilationSheetSnip = forwardRef<ReconcilationSheetSnipHandle, P
             dateSelections={dateSelections}
             setDateSelections={setDateSelections}
             canEdit={canEdit}
-            errors={errors}
             setErrors={setErrors}
           />
         )}
@@ -361,17 +357,19 @@ ReconcilationSheetSnip.displayName = 'ReconcilationSheetSnip';
 
 interface SampleDetailsGridProps {
   questions: QuestionAnswerPreview[];
-  answers: Record<number, string>;
-  setAnswers: React.Dispatch<React.SetStateAction<Record<number, string>>>;
-  dateSelections: Record<number, Date | null>;
-  setDateSelections: React.Dispatch<React.SetStateAction<Record<number, Date | null>>>;
+  // This grid stores extra per-row fields under composite string keys
+  // (`${sqmId}_vails`, `${sqmId}_issued`, `${sqmId}_received`) in the same
+  // records the primary grid keys numerically — hence the number|string keys.
+  answers: Record<number | string, string>;
+  setAnswers: React.Dispatch<React.SetStateAction<Record<number | string, string>>>;
+  dateSelections: Record<number | string, Date | null>;
+  setDateSelections: React.Dispatch<React.SetStateAction<Record<number | string, Date | null>>>;
   canEdit: boolean;
-  errors: Record<number, string>;
   setErrors: React.Dispatch<React.SetStateAction<Record<number, string>>>;
 }
 
 const SampleDetailsGrid = ({
-  questions, answers, setAnswers, dateSelections, setDateSelections, canEdit, errors, setErrors,
+  questions, answers, setAnswers, dateSelections, setDateSelections, canEdit, setErrors,
 }: SampleDetailsGridProps) => (
   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
     <thead>

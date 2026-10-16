@@ -47,9 +47,11 @@ class QuestionAnswerPreview(BaseModel):
     sap_field_name: str | None = None
     is_editable: bool = True
     custom_answers: str | None = None
+    is_approvable: bool = False
     sub_questions: list[QuestionAnswerPreview] = []
     options: list[QuestionOptionSchema] = []
     response_options: list[QuestionOptionSchema] = []
+    approval_labels: list[ApprovalLabelPreview] = []
 
     @classmethod
     def from_dto(cls, dto: QuestionAnswerPreviewDTO) -> QuestionAnswerPreview:
@@ -71,19 +73,22 @@ class QuestionAnswerPreview(BaseModel):
             sap_field_name=dto.sap_field_name,
             is_editable=dto.is_editable,
             custom_answers=dto.custom_answers,
+            is_approvable=dto.is_approvable,
             sub_questions=[cls.from_dto(sq) for sq in dto.sub_questions],
             options=[QuestionOptionSchema.from_dto(o) for o in dto.options],
             response_options=[QuestionOptionSchema.from_dto(o) for o in dto.response_options],
+            approval_labels=[ApprovalLabelPreview.from_dto(a) for a in dto.approval_labels],
         )
 
 
 class ApprovalLabelPreview(BaseModel):
     approval_label_id: int
     label: str
+    role_ids: list[int] = []
 
     @classmethod
     def from_dto(cls, dto: ApprovalLabelPreviewDTO) -> ApprovalLabelPreview:
-        return cls(approval_label_id=dto.approval_label_id, label=dto.label)
+        return cls(approval_label_id=dto.approval_label_id, label=dto.label, role_ids=dto.role_ids)
 
 
 class ColumnPreview(BaseModel):

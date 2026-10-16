@@ -7,11 +7,11 @@ one stage is back with the analyst.
 
 from datetime import UTC, datetime
 
-from src.application.services.qc_checklist.stage_action_base_service import (
-    StageActionBase,
+from src.application.dtos.qc_checklist.stage_action_dtos import (
     SubmitStageRequest,
     SubmitStageResult,
 )
+from src.application.services.qc_checklist.stage_action_base_service import StageActionBase
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import (
     ChecklistRequestModel,
 )

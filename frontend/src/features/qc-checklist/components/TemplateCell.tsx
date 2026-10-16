@@ -7,9 +7,13 @@
 import { InputText } from 'primereact/inputtext';
 import { RadioButton } from 'primereact/radiobutton';
 import { OptionSelector } from './OptionSelector';
+import { QuestionApprovalLabels, type QuestionApprovalAccess } from './QuestionApprovalLabels';
 import type { ColumnPreview } from '../models/ChecklistPreview';
 import type { QuestionAnswerPreview } from '../models/TemplateTypes';
 import type { RowErrors } from '../hooks/useValidateTemplateAnswers';
+
+// Re-export so existing importers (TemplateDrivenSnip) keep their import path.
+export type { QuestionApprovalAccess, ApprovalActedInfo } from './QuestionApprovalLabels';
 
 type ColumnLike = Pick<ColumnPreview, 'column_type'>;
 
@@ -45,6 +49,8 @@ interface Props {
   onHelperAdd: () => void;
   /** Sub-question answer state access (used only by the QUESTION cell). */
   subAccess?: SubAnswerAccess;
+  /** Per-question approval remark access (used only by the QUESTION cell). */
+  approvalAccess?: QuestionApprovalAccess;
   /** True when this row is the SAP-lookup trigger (the editable INSP_LOT
    * question in Basic Details). On blur of its answer box, the entered value
    * is used to look up SAP and auto-fill the other mapped answers. */
@@ -128,6 +134,7 @@ export const TemplateCell = ({
   onHelperRemove,
   onHelperAdd,
   subAccess,
+  approvalAccess,
   isSapTrigger = false,
   sapLoading = false,
   sapError = null,
@@ -160,6 +167,9 @@ export const TemplateCell = ({
               ))}
             </div>
           )}
+          {/* Per-question approval sign-off block (remark dropdown while
+              fillable; recorded remark + who + when once acted). */}
+          <QuestionApprovalLabels row={row} access={approvalAccess} />
         </div>
       );
 

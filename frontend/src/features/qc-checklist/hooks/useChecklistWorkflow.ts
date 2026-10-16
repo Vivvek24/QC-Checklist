@@ -20,7 +20,7 @@
  */
 
 import { useRef, useState } from 'react';
-import { qcChecklistApi, type SubmitStageAnswerInput, type SubmitStageExtra, type ApprovalLabelMappingResponse } from '../api/qcChecklistApi';
+import { qcChecklistApi, type SubmitStageAnswerInput, type SubmitStageExtra, type ApprovalLabelMappingResponse, type QuestionApprovalInput } from '../api/qcChecklistApi';
 import type { ApprovalSnipHandle } from '../components/ApprovalSnip';
 import type { ChecklistPreview, ColumnPreview } from '../models/ChecklistPreview';
 import type { SavedAnswer, SavedSubAnswer } from './useValidateTemplateAnswers';
@@ -37,6 +37,8 @@ const apiErrorMessage = (e: unknown): string | undefined => {
 export interface SnipHandle {
   validate: () => boolean;
   getAnswers: () => SubmitStageAnswerInput[];
+  /** Per-question approval remark picks (grids without approvable questions omit this). */
+  getQuestionApprovals?: () => QuestionApprovalInput[];
 }
 
 export interface UseChecklistWorkflowResult {
@@ -54,6 +56,10 @@ export interface UseChecklistWorkflowResult {
   savedSubAnswersByFsm: Record<number, Record<number, SavedSubAnswer[]>>;
   /** Persisted approval-label mappings keyed by format_stage_mapping_id. */
   approvalMappingsByFsm: Record<number, ApprovalLabelMappingResponse[]>;
+  /** Per-question approval mappings for the whole request (keyed by question_answer_id). */
+  questionApprovalMappings: ApprovalLabelMappingResponse[];
+  /** question_answer_id -> stage_question_mapping_id, from the loaded answers. */
+  sqmByQuestionAnswerId: Record<number, number>;
   /** True while an action (submit/approve/draft/refer-back) is in flight. */
   submitting: boolean;
   snipRefs: React.RefObject<Record<number, SnipHandle | null>>;
@@ -91,6 +97,10 @@ export const useChecklistWorkflow = ({
   const [savedAnswersByFsm, setSavedAnswersByFsm] = useState<Record<number, Record<number, SavedAnswer>>>({});
   const [savedSubAnswersByFsm, setSavedSubAnswersByFsm] = useState<Record<number, Record<number, SavedSubAnswer[]>>>({});
   const [approvalMappingsByFsm, setApprovalMappingsByFsm] = useState<Record<number, ApprovalLabelMappingResponse[]>>({});
+  // Per-question approval mappings for the whole request + a question_answer_id
+  // -> stage_question_mapping_id map, so the grid can pre-fill acted remarks.
+  const [questionApprovalMappings, setQuestionApprovalMappings] = useState<ApprovalLabelMappingResponse[]>([]);
+  const [sqmByQuestionAnswerId, setSqmByQuestionAnswerId] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const snipRefs = useRef<Record<number, SnipHandle | null>>({});
   const approvalRefs = useRef<Record<number, ApprovalSnipHandle | null>>({});
@@ -123,6 +133,8 @@ export const useChecklistWorkflow = ({
     setSavedAnswersByFsm({});
     setSavedSubAnswersByFsm({});
     setApprovalMappingsByFsm({});
+    setQuestionApprovalMappings([]);
+    setSqmByQuestionAnswerId({});
     if (!nextFormatId) {
       setPreview(null);
       setFormatId(null);
@@ -152,6 +164,8 @@ export const useChecklistWorkflow = ({
     setSavedAnswersByFsm({});
     setSavedSubAnswersByFsm({});
     setApprovalMappingsByFsm({});
+    setQuestionApprovalMappings([]);
+    setSqmByQuestionAnswerId({});
     try {
       const request = await qcChecklistApi.getRequestByNumber(requestNumber);
       if (!request) {
@@ -184,7 +198,17 @@ export const useChecklistWorkflow = ({
       const answersMap: Record<number, Record<number, SavedAnswer>> = {};
       const subAnswersMap: Record<number, Record<number, SavedSubAnswer[]>> = {};
       const mappingsMap: Record<number, ApprovalLabelMappingResponse[]> = {};
+      const qaToSqm: Record<number, number> = {};
       const fetchPromises: Promise<void>[] = [];
+
+      // Per-question approval mappings for the whole request (keyed by
+      // question_answer_id) — pre-fills each question's acted approval remark.
+      let questionApprovals: ApprovalLabelMappingResponse[] = [];
+      fetchPromises.push(
+        qcChecklistApi.listQuestionApprovalMappingsForRequest(request.id).then((rows) => {
+          questionApprovals = rows;
+        })
+      );
 
       for (const [fsmStr, stageId] of Object.entries(stageIdMap)) {
         const fsm = Number(fsmStr);
@@ -214,6 +238,9 @@ export const useChecklistWorkflow = ({
                     question_option_id: r.question_option_id,
                     response_answer: r.response_answer || '',
                   };
+                  // question_answer_id -> sqm, so per-question approval mappings
+                  // (keyed by question_answer_id) can attach to the right row.
+                  qaToSqm[r.id] = r.stage_question_mapping_id;
                 }
               }
               answersMap[fsm] = byQuestion;
@@ -240,6 +267,8 @@ export const useChecklistWorkflow = ({
       setSavedAnswersByFsm(answersMap);
       setSavedSubAnswersByFsm(subAnswersMap);
       setApprovalMappingsByFsm(mappingsMap);
+      setQuestionApprovalMappings(questionApprovals);
+      setSqmByQuestionAnswerId(qaToSqm);
 
       // Overlay the live stage statuses from the persisted request onto the
       // format preview, so the page renders the actual fillable stage(s)
@@ -288,11 +317,14 @@ export const useChecklistWorkflow = ({
     if (!basic || basic.format_stage_mapping_id === submittedFsmId) return [];
     if (!['Initial', 'Draft', 'ReferBack'].includes(basic.status)) return [];
 
-    const basicAnswers = snipRefs.current[basic.format_stage_mapping_id]?.getAnswers() ?? [];
+    const basicRef = snipRefs.current[basic.format_stage_mapping_id];
+    const basicAnswers = basicRef?.getAnswers() ?? [];
+    const basicApprovals = basicRef?.getQuestionApprovals?.() ?? [];
     return [{
       format_stage_mapping_id: basic.format_stage_mapping_id,
       checklist_stage_id: stageIdByFsm.current[basic.format_stage_mapping_id] ?? null,
       answers: toApiAnswers(basicAnswers),
+      question_approvals: basicApprovals.length > 0 ? basicApprovals : undefined,
     }];
   };
 
@@ -305,6 +337,7 @@ export const useChecklistWorkflow = ({
 
     const ref = snipRefs.current[fsmId];
     const answers = ref?.getAnswers() ?? [];
+    const questionApprovals = ref?.getQuestionApprovals?.() ?? [];
 
     // Remark comes from this stage's approval section (absent on Basic
     // Details, which has no approval snip — then there's no remark to send).
@@ -319,6 +352,8 @@ export const useChecklistWorkflow = ({
       remark_id: remark?.remark_id ?? null,
       remark_text: remark?.remark_text ?? '',
       answers: toApiAnswers(answers),
+      // Per-question approval remark picks for this stage's approvable questions.
+      question_approvals: questionApprovals.length > 0 ? questionApprovals : undefined,
       // On submit, carry Basic Details along so the header stage is persisted
       // and moved to Pending (not applicable to save-as-draft).
       extra_stages: action === 'submit' ? buildBasicDetailsExtra(fsmId) : undefined,
@@ -419,6 +454,8 @@ export const useChecklistWorkflow = ({
     savedAnswersByFsm,
     savedSubAnswersByFsm,
     approvalMappingsByFsm,
+    questionApprovalMappings,
+    sqmByQuestionAnswerId,
     submitting,
     snipRefs,
     approvalRefs,

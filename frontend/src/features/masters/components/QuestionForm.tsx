@@ -7,15 +7,24 @@ import { useCallback, useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from 'primereact/button';
 import { Sidebar } from 'primereact/sidebar';
+import { Dialog } from 'primereact/dialog';
 import { Dropdown } from 'primereact/dropdown';
 import { InputSwitch } from 'primereact/inputswitch';
+import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
+import { MultiSelect } from 'primereact/multiselect';
+import { DataTable } from 'primereact/datatable';
+import { Column } from 'primereact/column';
+import { Tag } from 'primereact/tag';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { ANSWER_TYPE_OPTIONS } from '../models/Question';
 import { useValidationTypes } from '../hooks/useValidationTypes';
 import { useQuestions } from '../hooks/useQuestions';
+import { useApprovalLabelForQuestion, type LocalLabel } from '../hooks/useApprovalLabelForQuestion';
 import { questionOptionApi } from '../api/questionOptionApi';
+import { MenuGate } from '@core/rbac';
+import { MasterRowActions } from './MasterRowActions';
 import { QuestionFormOptions } from './QuestionFormOptions';
 import { QuestionFormResponseOptions } from './QuestionFormResponseOptions';
 import { QuestionFormSubQuestions } from './QuestionFormSubQuestions';
@@ -23,6 +32,13 @@ import type { QuestionOptionFormData } from './QuestionOptionForm';
 import type { LocalOptionWithTemp } from './QuestionFormOptions';
 import type { CreateQuestionRequest, Question } from '../models/Question';
 import type { QuestionOption } from '../models/QuestionOption';
+
+/** Payload the parent (QuestionPage) receives: the question fields + options +
+ * the question's approval labels to sync after the question is saved. */
+export type QuestionSubmitPayload = CreateQuestionRequest & {
+  options: LocalOption[];
+  approval_labels: { id?: number; label: string; role_ids: number[]; is_active: boolean }[];
+};
 
 const BOOL_FLAGS = [
   { name: 'has_text_box',          label: 'Has Text Box' },
@@ -32,6 +48,7 @@ const BOOL_FLAGS = [
   { name: 'has_response_option',   label: 'Has Response Option' },
   { name: 'has_associated_master', label: 'Has Associated Master' },
   { name: 'is_calculated',         label: 'Is Calculated' },
+  { name: 'is_approvable',         label: 'Is Approvable' },
   { name: 'is_active',             label: 'Active' },
 ] as const;
 
@@ -52,6 +69,7 @@ const schema = z.object({
   allow_multiple_input: z.boolean(),
   has_associated_master: z.boolean(),
   is_calculated: z.boolean(),
+  is_approvable: z.boolean(),
   is_active: z.boolean(),
   validation_type_id: z.number().nullable(),
   master_type: z.string().nullable(),
@@ -65,7 +83,7 @@ const EMPTY: FormData = {
   title: '', answer_type: '',
   has_text_box: false, has_multiple_text_box: false, has_sub_question: false,
   is_validation_required: false, has_response_option: false, allow_multiple_input: false,
-  has_associated_master: false, is_calculated: false, is_active: true,
+  has_associated_master: false, is_calculated: false, is_approvable: false, is_active: true,
   validation_type_id: null, master_type: null, parent_question_id: null,
   sub_question_ids: [],
 };
@@ -82,7 +100,7 @@ interface QuestionFormProps {
   question: Question | null;
   saving?: boolean;
   onHide: () => void;
-  onSubmit: (data: CreateQuestionRequest & { options: LocalOption[] }) => void;
+  onSubmit: (data: QuestionSubmitPayload) => void;
 }
 
 let optCounter = 0;
@@ -104,6 +122,17 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
   const hasResponseOption = watch('has_response_option');
   const isValidationRequired = watch('is_validation_required');
   const hasSubQuestion = watch('has_sub_question');
+  const isApprovable = watch('is_approvable');
+
+  // Approval labels for this question (mirrors the Stage approval-label flow,
+  // but keyed by question_id). All state/logic lives in the hook.
+  const {
+    roleOptions, roleMap,
+    localLabels, labelDialogOpen, editingLabelIdx,
+    register: regLabel, control: labelCtrl, errors: labelErrors,
+    loadLabels, resetLabels, openCreateLabel, openEditLabel, deleteLabel,
+    closeLabelDialog, submitLabel, toPayload: approvalLabelsPayload,
+  } = useApprovalLabelForQuestion();
 
   // Local options state
   const [localOptions, setLocalOptions] = useState<LocalOptionWithTemp[]>([]);
@@ -139,7 +168,8 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
       has_response_option: question.has_response_option,
       allow_multiple_input: question.allow_multiple_input,
       has_associated_master: question.has_associated_master,
-      is_calculated: question.is_calculated, is_active: question.is_active,
+      is_calculated: question.is_calculated, is_approvable: question.is_approvable,
+      is_active: question.is_active,
       validation_type_id: question.validation_type_id ?? null,
       master_type: question.master_type ?? null,
       parent_question_id: question.parent_question_id ?? null,
@@ -149,11 +179,12 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
     setEditingOptIdx(null);
     setRespOptFormVisible(false);
     setEditingRespOptIdx(null);
-    if (questionId) { loadOptions(questionId); } else { setLocalOptions([]); setLocalRespOptions([]); }
+    resetLabels();
+    if (questionId) { loadOptions(questionId); loadLabels(questionId); } else { setLocalOptions([]); setLocalRespOptions([]); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const close = () => { reset(EMPTY); setLocalOptions([]); setLocalRespOptions([]); onHide(); };
+  const close = () => { reset(EMPTY); setLocalOptions([]); setLocalRespOptions([]); resetLabels(); onHide(); };
 
   // Option handlers
   const openAddOption = () => { setEditingOptIdx(null); setOptionFormVisible(true); };
@@ -197,6 +228,7 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
       allow_multiple_input: data.allow_multiple_input,
       has_associated_master: data.has_associated_master,
       is_calculated: data.is_calculated,
+      is_approvable: data.is_approvable,
       is_active: data.is_active,
       validation_type_id: data.validation_type_id,
       master_type: data.master_type,
@@ -206,6 +238,9 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
         ...localOptions.map((o) => ({ id: o.id, option_title: o.option_title, is_active: o.is_active, is_response_option: false })),
         ...localRespOptions.map((o) => ({ id: o.id, option_title: o.option_title, is_active: o.is_active, is_response_option: true })),
       ],
+      // Only sync labels when the question is approvable; otherwise send an
+      // empty list so any previously-added labels get cleared on save.
+      approval_labels: data.is_approvable ? approvalLabelsPayload() : [],
     });
   };
 
@@ -227,6 +262,7 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
   );
 
   return (
+    <>
     <Sidebar
       visible={visible}
       onHide={close}
@@ -325,6 +361,33 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
           )}
         </div>
 
+        {/* Approval Labels — visible when Is Approvable is ON (mirrors Stage) */}
+        {isApprovable && (
+          <MenuGate menuKey="masters.approval_labels">
+            <div className="flex flex-column gap-2">
+              <label className="font-medium text-sm">Approval Labels</label>
+              <Button type="button" label="Add Approval Label" icon="pi pi-plus" size="small"
+                outlined onClick={openCreateLabel} className="align-self-start" />
+              {localLabels.length > 0 && (
+                <DataTable value={localLabels} size="small" stripedRows
+                  emptyMessage="No approval labels." style={{ fontSize: '0.78rem' }}>
+                  <Column field="label" header="Label" />
+                  <Column header="Roles" body={(row: LocalLabel) =>
+                    row.role_ids.map((id) => roleMap[id] ?? id).join(', ') || '—'
+                  } />
+                  <Column header="Status" body={(row: LocalLabel) => (
+                    <Tag value={row.is_active ? 'Active' : 'Inactive'} severity={row.is_active ? 'success' : 'warning'} />
+                  )} style={{ width: '6rem' }} />
+                  <Column header="Actions" body={(_row: LocalLabel, opts) => (
+                    <MasterRowActions label={_row.label} canUpdate={true} canDelete={true}
+                      onEdit={() => openEditLabel(opts.rowIndex)} onDelete={() => deleteLabel(opts.rowIndex)} />
+                  )} style={{ width: '6rem' }} />
+                </DataTable>
+              )}
+            </div>
+          </MenuGate>
+        )}
+
         {/* Add Options — visible when answer_type is dropdown single/multi */}
         {(answerType === 'Dropdown (single select)' || answerType === 'Dropdown (multi select)') && (
           <QuestionFormOptions
@@ -361,5 +424,48 @@ export const QuestionForm = ({ visible, question, saving, onHide, onSubmit }: Qu
         </div>
       </form>
     </Sidebar>
+
+    {/* Approval Label dialog — opens on top of the question panel. */}
+    <Dialog
+      header={editingLabelIdx !== null ? 'Edit Approval Label' : 'Add Approval Label'}
+      visible={labelDialogOpen}
+      onHide={closeLabelDialog}
+      style={{ width: '420px', zIndex: 1100 }}
+      modal={false}
+      closable
+      dismissableMask={false}
+      className="p-dialog-top"
+      footer={
+        <div className="flex justify-content-end gap-2">
+          <Button label="Cancel" severity="secondary" outlined onClick={closeLabelDialog} />
+          <Button label={editingLabelIdx !== null ? 'Save' : 'Add'}
+            onClick={submitLabel} />
+        </div>
+      }
+    >
+      <form className="flex flex-column gap-3 pt-3">
+        <div className="flex flex-column gap-2">
+          <label className="font-medium text-sm">Label <span className="p-error">*</span></label>
+          <InputText {...regLabel('label')} placeholder="e.g. Level 1 Approval"
+            className={labelErrors.label ? 'p-invalid' : ''} />
+          {labelErrors.label && <small className="p-error">{labelErrors.label.message}</small>}
+        </div>
+        <div className="flex flex-column gap-2">
+          <label className="font-medium text-sm">User Roles</label>
+          <Controller name="role_ids" control={labelCtrl} render={({ field }) => (
+            <MultiSelect value={field.value} options={roleOptions}
+              onChange={(e) => field.onChange(e.value)} placeholder="Select roles"
+              filter display="chip" className="w-full" />
+          )} />
+        </div>
+        <div className="flex align-items-center gap-3">
+          <Controller name="is_active" control={labelCtrl} render={({ field }) => (
+            <InputSwitch checked={field.value} onChange={(e) => field.onChange(e.value)} />
+          )} />
+          <label className="font-medium text-sm">Active</label>
+        </div>
+      </form>
+    </Dialog>
+    </>
   );
 };

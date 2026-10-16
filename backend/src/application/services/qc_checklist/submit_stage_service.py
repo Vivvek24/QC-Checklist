@@ -12,13 +12,14 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
-from src.application.services.qc_checklist.stage_action_base_service import (
+from src.application.dtos.qc_checklist.stage_action_dtos import (
     ExtraStagePayload,
     QuestionAnswerPayload,
-    StageActionBase,
+    QuestionApprovalPayload,
     SubmitStageRequest,
     SubmitStageResult,
 )
+from src.application.services.qc_checklist.stage_action_base_service import StageActionBase
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import (
     ChecklistRequestModel,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "SubmitStageRequest",
     "SubmitStageResult",
     "QuestionAnswerPayload",
+    "QuestionApprovalPayload",
     "ExtraStagePayload",
 ]
 
@@ -43,9 +45,15 @@ class SubmitStageService(StageActionBase):
         resolved = await self.resolve(request, user_id, role_id, now, authorize=True)
         cr, cs = resolved.request, resolved.stage
 
+        # Per-question approval remarks for the primary stage's approvable
+        # questions (answers were just saved in resolve()).
+        await self._persist_question_approvals(
+            cs.id, request.question_approvals, user_id, role_id, now
+        )
+
         # Basic Details rides along on first submit (no Submit button of its own).
         if request.extra_stages:
-            await self._submit_extra_stages(cr, request.extra_stages, user_id, now)
+            await self._submit_extra_stages(cr, request.extra_stages, user_id, role_id, now)
 
         return await self._submit(
             cr, cs, user_id, role_id, request.remark_id, request.remark_text, now
@@ -96,7 +104,7 @@ class SubmitStageService(StageActionBase):
 
     async def _submit_extra_stages(
         self, cr: ChecklistRequestModel, extra_stages: list[ExtraStagePayload],
-        user_id: int, now: datetime,
+        user_id: int, role_id: int | None, now: datetime,
     ) -> None:
         """Persist + advance secondary stages (Basic Details) submitted with the
         primary one. Validates each; blocks the whole submit if invalid."""
@@ -123,6 +131,11 @@ class SubmitStageService(StageActionBase):
 
             if extra.answers:
                 await self._persist_answers(cs.id, extra.answers, user_id, now)
+
+            # Per-question approvals for this extra stage's approvable questions.
+            await self._persist_question_approvals(
+                cs.id, extra.question_approvals, user_id, role_id, now
+            )
 
             await self._validate_stage(cr, cs)
 

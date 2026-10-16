@@ -81,6 +81,10 @@ class _QuestionMetadata:
         q = self.by_id.get(qid)
         return q.has_sub_question if q else False
 
+    def is_approvable(self, qid: int) -> bool:
+        q = self.by_id.get(qid)
+        return q.is_approvable if q else False
+
 
 def _to_column_preview(c: TemplateLayoutColumn) -> ColumnPreviewDTO:
     return ColumnPreviewDTO(
@@ -190,8 +194,10 @@ class ChecklistPreviewService:
         meta: _QuestionMetadata,
         sub_questions_map: dict[int, list[QuestionAnswerPreviewDTO]],
         section_name: str | None,
+        approval_labels_map: dict[int, list[ApprovalLabelPreviewDTO]] | None = None,
     ) -> QuestionAnswerPreviewDTO:
         qid = sqm.question_id
+        labels = (approval_labels_map or {}).get(qid, [])
         return QuestionAnswerPreviewDTO(
             stage_question_mapping_id=sqm.id,
             question_id=qid,
@@ -212,10 +218,31 @@ class ChecklistPreviewService:
             ),
             is_editable=sqm.is_editable,
             custom_answers=sqm.custom_answers.value if sqm.custom_answers else None,
+            is_approvable=meta.is_approvable(qid),
             sub_questions=sub_questions_map.get(qid, []),
             options=meta.options.get(qid, []),
             response_options=meta.response_options.get(qid, []),
+            approval_labels=labels,
         )
+
+    async def _build_question_approval_labels_map(
+        self, question_ids: list[int], meta: _QuestionMetadata
+    ) -> dict[int, list[ApprovalLabelPreviewDTO]]:
+        """For each approvable question, load its active approval labels so the
+        grid can render a per-question approval block (mirrors stage labels)."""
+        result: dict[int, list[ApprovalLabelPreviewDTO]] = {}
+        for qid in question_ids:
+            if not meta.is_approvable(qid):
+                continue
+            labels = await self._approval_label_repo.list_active_by_question(qid)
+            if labels:
+                result[qid] = [
+                    ApprovalLabelPreviewDTO(
+                        approval_label_id=al.id, label=al.label, role_ids=al.role_ids
+                    )
+                    for al in labels
+                ]
+        return result
 
     async def build_questions_for_stage(
         self, fsm_id: int, has_section: bool
@@ -231,6 +258,7 @@ class ChecklistPreviewService:
         q_ids = [sqm.question_id for sqm in sqm_list if sqm.question_id]
         meta = await self._fetch_question_metadata(q_ids)
         sub_questions_map = await self._build_sub_questions_map(q_ids, meta)
+        approval_labels_map = await self._build_question_approval_labels_map(q_ids, meta)
 
         all_columns = await self._column_repo.list_for_stage(fsm_id)
         stage_columns = [_to_column_preview(c) for c in all_columns if c.section_id is None]
@@ -249,7 +277,7 @@ class ChecklistPreviewService:
 
             for sec in all_sections:
                 sec_questions = [
-                    self._to_question_answer_preview(sqm, meta, sub_questions_map, sec.section_name)
+                    self._to_question_answer_preview(sqm, meta, sub_questions_map, sec.section_name, approval_labels_map)
                     for sqm in sqm_list
                     if sqm.section_id == sec.id
                 ]
@@ -267,6 +295,7 @@ class ChecklistPreviewService:
             questions.append(self._to_question_answer_preview(
                 sqm, meta, sub_questions_map,
                 section_map.get(sqm.section_id) if sqm.section_id else None,
+                approval_labels_map,
             ))
 
         return questions, sections_preview, stage_columns
