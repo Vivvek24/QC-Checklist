@@ -56,6 +56,8 @@ export interface QuestionChoice {
   hasSubQuestion: boolean;
   masterType: string | null;
   options: { id: number; label: string }[];
+  /** Response options (for the RESPONSE_QUESTION_OPTION column dropdown). */
+  responseOptions: { id: number; label: string }[];
   aqlLimit: string;
   subQuestions: SubQuestionChoice[];
 }
@@ -394,6 +396,20 @@ export const ConfigTable = ({ columns, rows, questionChoices, stageName, ctx, on
 
       case 'RESPONSE':
         return <ResponseInput name={`resp_${column.key}_${row.key}`} />;
+
+      case 'RESPONSE_QUESTION_OPTION': {
+        if (!q) return needQuestion;
+        if (q.responseOptions.length === 0) {
+          return <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.72rem' }}>no response options</span>;
+        }
+        return (
+          <div className="flex flex-column gap-1">
+            {q.responseOptions.map((o) => (
+              <span key={o.id} style={{ fontSize: '0.72rem', color: '#475569' }}>• {o.label}</span>
+            ))}
+          </div>
+        );
+      }
 
       case 'ANSWER':
       default: {

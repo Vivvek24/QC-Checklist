@@ -34,6 +34,7 @@ from reportlab.platypus import (
 
 from src.domain.entities.qc_checklist.checklist_pdf_document import (
     PdfColumn,
+    PdfDeclaration,
     PdfDocument,
     PdfRowGroup,
     PdfSection,
@@ -196,11 +197,44 @@ class ChecklistPdfRenderer:
             if group.rows:
                 flow.append(self._build_table(group))
 
+        # Declaration questions (if any) render just above the remarks, under a
+        # bold "Declaration" heading.
+        if section.declarations:
+            flow.append(Spacer(1, 6))
+            flow.append(Paragraph("Declaration", self._styles["section"]))
+            flow.append(self._build_declarations(section.declarations))
+
         if section.signatures:
             flow.append(Spacer(1, 6))
             flow.append(self._build_remarks(section))
         flow.append(Spacer(1, 10))
         return flow
+
+    def _build_declarations(self, declarations: list[PdfDeclaration]) -> KeepTogether:
+        """Declaration questions as a Question / Answer table under the stage."""
+        head = self._styles["cell_header"]
+        cell = self._styles["cell"]
+        avail = _PAGE_W - 2 * _MARGIN
+        col_widths = [avail * 0.65, avail * 0.35]
+
+        data = [[Paragraph("Question", head), Paragraph("Selected Value", head)]]
+        for d in declarations:
+            data.append([
+                Paragraph(_esc(d.question), cell),
+                Paragraph(_esc(d.answer) or "N/A", cell),
+            ])
+
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
+            ("GRID", (0, 0), (-1, -1), 0.5, _GRID),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return KeepTogether(table)
 
     def _build_table(self, group: PdfRowGroup) -> Table:
         head = self._styles["cell_header"]

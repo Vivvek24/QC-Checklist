@@ -25,6 +25,7 @@ export interface SubmitStageAnswerInput {
   question_id: number;
   textbox_value: string;
   question_option_id: number | null;
+  response_question_option_id?: number | null;
   response_answer: string;
   helpers: string[];
   product_id?: number | null;

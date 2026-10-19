@@ -55,6 +55,7 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
       selections, setSelections,
       answers, setAnswers,
       responses, setResponses,
+      responseOptionSelections, setResponseOptionSelections,
       helpers, setHelpers,
       errors, helperErrors, clearError, clearHelperError,
       sapTriggerKey, fetchFromSap, sapLoading, sapError,
@@ -67,8 +68,10 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
 
     useImperativeHandle(ref, () => ({ validate: validateAll, getAnswers, getQuestionApprovals }));
 
-    /** Render one table for a given set of columns + question rows. */
-    const renderTable = (cols: ColumnPreview[], rows: QuestionAnswerPreview[], keyPrefix: string) => {
+    /** Render one table for a given set of columns + question rows.
+     * Declaration questions are excluded — they render in the ApprovalSnip. */
+    const renderTable = (cols: ColumnPreview[], allRows: QuestionAnswerPreview[], keyPrefix: string) => {
+      const rows = allRows.filter((r) => !r.is_declaration_question);
       const orderedColumns = cols
         .filter((c) => c.column_type !== 'RESPONSE' || !isBasicDetails)
         .slice()
@@ -140,6 +143,11 @@ export const TemplateDrivenSnip = forwardRef<TemplateDrivenSnipHandle, Props>(
                           onResponseChange={(val) => {
                             setResponses((prev) => ({ ...prev, [key]: val }));
                             clearError(key, 'response');
+                          }}
+                          responseOption={responseOptionSelections[key] ?? null}
+                          onResponseOptionChange={(val) => {
+                            setResponseOptionSelections((prev) => ({ ...prev, [key]: val }));
+                            clearError(key, 'responseOption');
                           }}
                           helperValues={helpers[key] || []}
                           helperErrors={helperErrors[key]}

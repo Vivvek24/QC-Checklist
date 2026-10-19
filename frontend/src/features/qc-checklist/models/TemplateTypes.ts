@@ -26,6 +26,8 @@ export interface QuestionAnswerPreview {
   /** True when this question carries its own approval labels. */
   is_approvable?: boolean;
   options: { id: number; label: string }[];
+  /** Response options for the RESPONSE_QUESTION_OPTION column dropdown. */
+  response_options?: { id: number; label: string }[];
   /** Child questions shown nested under this one (read-only display). */
   sub_questions?: QuestionAnswerPreview[];
   /** Approval labels configured for this question (empty/undefined unless approvable). */
@@ -44,6 +46,8 @@ export interface TemplateAnswer {
   question_id: number;
   textbox_value: string;
   question_option_id: number | null;
+  /** Chosen response option id (RESPONSE_QUESTION_OPTION column). */
+  response_question_option_id: number | null;
   response_answer: string;
   helpers: string[];
   /** Answers for this question's sub-questions (if any). */

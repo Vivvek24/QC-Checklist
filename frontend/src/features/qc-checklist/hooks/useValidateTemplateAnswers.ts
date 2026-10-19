@@ -10,12 +10,13 @@
 import { useEffect, useState } from 'react';
 import type { QuestionAnswerPreview, TemplateAnswer, TemplateSubAnswer } from '../models/TemplateTypes';
 
-export type RowErrors = { options?: string; answer?: string; response?: string };
+export type RowErrors = { options?: string; answer?: string; response?: string; responseOption?: string };
 
 /** Pre-loaded saved answer for a question row (keyed by stage_question_mapping_id). */
 export interface SavedAnswer {
   textbox_value: string;
   question_option_id: number | null;
+  response_question_option_id?: number | null;
   response_answer: string;
 }
 
@@ -37,6 +38,7 @@ export interface UseValidateTemplateAnswersOptions {
   hasOptionColumn: boolean;
   hasAnswerColumn: boolean;
   hasResponseColumn: boolean;
+  hasResponseQuestionOptionColumn: boolean;
   isBasicDetails: boolean;
   /** Pre-loaded saved answers keyed by stage_question_mapping_id (for read-only view). */
   savedAnswers?: Record<number, SavedAnswer>;
@@ -51,6 +53,9 @@ export interface UseValidateTemplateAnswersResult {
   setAnswers: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   responses: Record<number, string>;
   setResponses: React.Dispatch<React.SetStateAction<Record<number, string>>>;
+  /** Selected response-option id per row (RESPONSE_QUESTION_OPTION column). */
+  responseOptionSelections: Record<number, number | null>;
+  setResponseOptionSelections: React.Dispatch<React.SetStateAction<Record<number, number | null>>>;
   helpers: Record<number, string[]>;
   setHelpers: React.Dispatch<React.SetStateAction<Record<number, string[]>>>;
   /** Sub-question answer state, keyed by `${parentSqmId}:${subQuestionId}`. */
@@ -80,6 +85,7 @@ export const useValidateTemplateAnswers = ({
   hasOptionColumn,
   hasAnswerColumn,
   hasResponseColumn,
+  hasResponseQuestionOptionColumn,
   isBasicDetails,
   savedAnswers,
   savedSubAnswers,
@@ -87,6 +93,7 @@ export const useValidateTemplateAnswers = ({
   const [selections, setSelections] = useState<Record<number, unknown>>({});
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [responses, setResponses] = useState<Record<number, string>>({});
+  const [responseOptionSelections, setResponseOptionSelections] = useState<Record<number, number | null>>({});
   const [helpers, setHelpers] = useState<Record<number, string[]>>({});
   const [errors, setErrors] = useState<Record<number, RowErrors>>({});
   const [helperErrors, setHelperErrors] = useState<Record<number, (string | undefined)[]>>({});
@@ -116,18 +123,21 @@ export const useValidateTemplateAnswers = ({
     const nextSelections: Record<number, unknown> = {};
     const nextAnswers: Record<number, string> = {};
     const nextResponses: Record<number, string> = {};
+    const nextResponseOptions: Record<number, number | null> = {};
     for (const [k, sa] of Object.entries(savedAnswers)) {
       const key = Number(k);
       if (sa.question_option_id != null) {
         const isMulti = answerTypeByKey.get(key) === 'Dropdown (multi select)';
         nextSelections[key] = isMulti ? [sa.question_option_id] : sa.question_option_id;
       }
+      if (sa.response_question_option_id != null) nextResponseOptions[key] = sa.response_question_option_id;
       if (sa.textbox_value) nextAnswers[key] = sa.textbox_value;
       if (sa.response_answer) nextResponses[key] = sa.response_answer;
     }
     setSelections(nextSelections);
     setAnswers(nextAnswers);
     setResponses(nextResponses);
+    setResponseOptionSelections(nextResponseOptions);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedAnswers]);
 
@@ -225,6 +235,15 @@ export const useValidateTemplateAnswers = ({
         }
       }
 
+      // Response-option dropdown: required only when the question actually has
+      // response options to choose from.
+      if (hasResponseQuestionOptionColumn && (row.response_options?.length ?? 0) > 0) {
+        if (responseOptionSelections[key] == null) {
+          rowErrors.responseOption = 'Select a response!';
+          isValid = false;
+        }
+      }
+
       // Helper ("+ Add") boxes: each is required, must contain no special
       // characters/spaces, and must not duplicate the main answer or another
       // helper on the same row.
@@ -254,7 +273,7 @@ export const useValidateTemplateAnswers = ({
         }
       }
 
-      if (rowErrors.options || rowErrors.answer || rowErrors.response) {
+      if (rowErrors.options || rowErrors.answer || rowErrors.response || rowErrors.responseOption) {
         newErrors[key] = rowErrors;
       }
     }
@@ -296,6 +315,7 @@ export const useValidateTemplateAnswers = ({
         question_id: row.question_id,
         textbox_value: answers[key] || '',
         question_option_id: toOptionId(selections[key]),
+        response_question_option_id: responseOptionSelections[key] ?? null,
         response_answer: responses[key] || '',
         helpers: helpers[key] || [],
         sub_answers: getSubAnswers(row),
@@ -306,6 +326,7 @@ export const useValidateTemplateAnswers = ({
     selections, setSelections,
     answers, setAnswers,
     responses, setResponses,
+    responseOptionSelections, setResponseOptionSelections,
     helpers, setHelpers,
     subSelections, subAnswers, subResponses,
     setSubSelection, setSubAnswer, setSubResponse,

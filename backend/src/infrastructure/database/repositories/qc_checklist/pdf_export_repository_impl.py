@@ -18,6 +18,7 @@ from sqlalchemy.orm import aliased
 
 from src.domain.entities.qc_checklist.checklist_pdf_document import (
     PdfColumn,
+    PdfDeclaration,
     PdfDocument,
     PdfRow,
     PdfRowGroup,
@@ -92,9 +93,12 @@ class PdfExportRepository(IPdfExportRepository):
         question_rows = await self._fetch_question_rows(request_number)
         columns = await self._fetch_columns(request_number)
         sub_answers = await self._fetch_sub_answers(request_number)
+        declarations = await self._fetch_declarations(request_number)
         signatures = await self._fetch_signatures(request_number)
 
-        sections = self._build_sections(question_rows, columns, sub_answers, signatures)
+        sections = self._build_sections(
+            question_rows, columns, sub_answers, declarations, signatures
+        )
 
         # Title: prefer the format's human title; fall back to its name. Shown
         # uppercased like the sample report.
@@ -222,6 +226,65 @@ class PdfExportRepository(IPdfExportRepository):
             .order_by(
                 FormatStageMappingModel.id,
                 StageQuestionMappingModel.section_id,
+                StageQuestionMappingModel.serial_number,
+                QuestionModel.id,
+            )
+        )
+        return list((await self._session.execute(stmt)).all())
+
+    async def _fetch_declarations(self, request_number: str) -> list[Row]:
+        """Every stage's declaration questions + their answered value, in
+        display order. These are shown as a Question/Answer block under the
+        stage, just above the remarks (they're not part of the main grid)."""
+        selected_opt = aliased(QuestionOptionModel)
+        response_opt = aliased(QuestionOptionModel)
+
+        answer_value = func.coalesce(
+            selected_opt.option_title,
+            func.nullif(QuestionAnswerModel.textbox_value, ""),
+            response_opt.option_title,
+            func.nullif(QuestionAnswerModel.response_answer, ""),
+            "",
+        )
+
+        stmt = (
+            select(
+                FormatStageMappingModel.id.label("stage_order"),
+                QuestionModel.title.label("question"),
+                answer_value.label("answer"),
+            )
+            .select_from(ChecklistRequestModel)
+            .join(
+                ChecklistStageModel,
+                ChecklistStageModel.checklist_request_id == ChecklistRequestModel.id,
+            )
+            .join(
+                FormatStageMappingModel,
+                FormatStageMappingModel.id == ChecklistStageModel.format_stage_mapping_id,
+            )
+            .join(
+                StageQuestionMappingModel,
+                (StageQuestionMappingModel.format_stage_mapping_id == FormatStageMappingModel.id)
+                & (StageQuestionMappingModel.is_active.is_(True))
+                & (StageQuestionMappingModel.is_declaration_question.is_(True)),
+            )
+            .join(QuestionModel, QuestionModel.id == StageQuestionMappingModel.question_id)
+            .outerjoin(
+                QuestionAnswerModel,
+                (QuestionAnswerModel.checklist_stage_id == ChecklistStageModel.id)
+                & (QuestionAnswerModel.stage_question_mapping_id == StageQuestionMappingModel.id),
+            )
+            .outerjoin(selected_opt, selected_opt.id == QuestionAnswerModel.question_option_id)
+            .outerjoin(
+                response_opt,
+                response_opt.id == QuestionAnswerModel.response_question_option_id,
+            )
+            .where(
+                ChecklistRequestModel.request_number == request_number,
+                ChecklistRequestModel.is_removed.is_(False),
+            )
+            .order_by(
+                FormatStageMappingModel.id,
                 StageQuestionMappingModel.serial_number,
                 QuestionModel.id,
             )
@@ -379,6 +442,7 @@ class PdfExportRepository(IPdfExportRepository):
         question_rows: list[Row],
         columns: list[Row],
         sub_answers: dict[int, list[Row]],
+        declarations: list[Row],
         signatures: list[Row],
     ) -> list[PdfSection]:
         """Group rows + signatures by stage, then by section within a stage,
@@ -418,6 +482,9 @@ class PdfExportRepository(IPdfExportRepository):
                         "OPTION": r.option or "",
                         "ANSWER": r.answer or "",
                         "RESPONSE": r.response or "",
+                        # The response-option dropdown resolves to the same
+                        # response-option value (via response_question_option_id).
+                        "RESPONSE_QUESTION_OPTION": r.response or "",
                         "AQL_LIMIT": self._format_number(r.aql_limit or ""),
                     },
                     sub_answers=[
@@ -438,6 +505,20 @@ class PdfExportRepository(IPdfExportRepository):
                 )
             )
 
+        decls_by_stage: dict[int, list[PdfDeclaration]] = {}
+        for d in declarations:
+            decls_by_stage.setdefault(d.stage_order, []).append(
+                PdfDeclaration(question=d.question or "", answer=d.answer or "")
+            )
+
+        # Stages carrying only declarations (no grid rows) still need a section
+        # so their declarations + signatures render.
+        for stage in [*decls_by_stage, *sigs_by_stage]:
+            if stage not in stage_titles:
+                stage_order.append(stage)
+                stage_titles[stage] = ""
+                group_order[stage] = []
+
         sections: list[PdfSection] = []
         for stage in stage_order:
             groups = [
@@ -452,6 +533,7 @@ class PdfExportRepository(IPdfExportRepository):
                 PdfSection(
                     title=stage_titles.get(stage, ""),
                     groups=groups,
+                    declarations=decls_by_stage.get(stage, []),
                     signatures=sigs_by_stage.get(stage, []),
                 )
             )

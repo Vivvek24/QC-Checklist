@@ -73,11 +73,21 @@ class PdfSignatureBlock:
 
 
 @dataclass
+class PdfDeclaration:
+    """A declaration question + its answer, shown as a Question/Answer table
+    under a stage, just above the remarks/signatures."""
+
+    question: str
+    answer: str
+
+
+@dataclass
 class PdfSection:
-    """A stage rendered as one or more grouped tables + its signatures."""
+    """A stage rendered as one or more grouped tables + declarations + signatures."""
 
     title: str
     groups: list[PdfRowGroup] = field(default_factory=list)
+    declarations: list[PdfDeclaration] = field(default_factory=list)
     signatures: list[PdfSignatureBlock] = field(default_factory=list)
 
 

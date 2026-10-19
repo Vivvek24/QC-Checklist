@@ -171,8 +171,10 @@ export const CreateRequestPage = () => {
                             hasDeclarationQuestion={preview.has_declaration_question}
                             mappings={approvalMappingsByFsm[fsmId]}
                             canAct={isFillable || isApprovable}
+                            canFillDeclarations={isFillable}
                             stageStatus={stage.status}
                             userNameById={userNameById}
+                            savedAnswers={savedAnswersByFsm[fsmId]}
                           />
 
                           {/* Action buttons — driven by label count + status:

@@ -18,6 +18,7 @@ export interface UseResolvedColumnsResult {
   hasOptionColumn: boolean;
   hasAnswerColumn: boolean;
   hasResponseColumn: boolean;
+  hasResponseQuestionOptionColumn: boolean;
 }
 
 export const useResolvedColumns = (
@@ -36,5 +37,6 @@ export const useResolvedColumns = (
     hasOptionColumn: orderedColumns.some((c) => c.column_type === 'OPTION'),
     hasAnswerColumn: orderedColumns.some((c) => c.column_type === 'ANSWER'),
     hasResponseColumn: orderedColumns.some((c) => c.column_type === 'RESPONSE'),
+    hasResponseQuestionOptionColumn: orderedColumns.some((c) => c.column_type === 'RESPONSE_QUESTION_OPTION'),
   };
 };

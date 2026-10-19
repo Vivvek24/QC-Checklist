@@ -14,6 +14,8 @@ import { InputTextarea } from 'primereact/inputtextarea';
 import { MultiSelect } from 'primereact/multiselect';
 import { InputText } from 'primereact/inputtext';
 import { useRemarks } from '../../masters/hooks/useRemarks';
+import type { SubmitStageAnswerInput } from '../api/qcChecklistApi';
+import type { SavedAnswer } from '../hooks/useValidateTemplateAnswers';
 
 const OTHERS_REMARK = 'Others';
 
@@ -25,6 +27,7 @@ interface QuestionAnswerPreview {
   answer_type: string;
   has_text_box: boolean;
   is_declaration_question: boolean;
+  options: { id: number; label: string }[];
   response_options: { id: number; label: string }[];
 }
 
@@ -56,6 +59,13 @@ interface Props {
   stageStatus?: string;
   /** Resolves an acting user's id to a display name (resolved on the UI). */
   userNameById?: (userId: number) => string;
+  /** True only while the stage is fillable by the analyst — declaration answers
+   * are editable only then; the approver sees them read-only. */
+  canFillDeclarations?: boolean;
+  /** Pre-loaded saved declaration answers (keyed by stage_question_mapping_id).
+   * Declaration answers are persisted on submit and shown read-only afterward
+   * (so the approver can't edit them). */
+  savedAnswers?: Record<number, SavedAnswer>;
 }
 
 export interface ApprovalSnipHandle {
@@ -63,11 +73,20 @@ export interface ApprovalSnipHandle {
   getRemark: () => { remark_id: number | null; remark_text: string };
   /** True when a valid remark is selected; sets an inline error otherwise. */
   validateRemark: () => boolean;
+  /** True when every answerable declaration question has a value; sets inline
+   * errors otherwise. */
+  validateDeclarations: () => boolean;
+  /** The declaration answers for the submit payload (one per answerable
+   * declaration question the user filled). */
+  getDeclarationAnswers: () => SubmitStageAnswerInput[];
 }
 
 export const ApprovalSnip = forwardRef<ApprovalSnipHandle, Props>(
-  ({ questions, approvalLabels, hasDeclarationQuestion, mappings = [], canAct = true, stageStatus, userNameById }, ref) => {
+  ({ questions, approvalLabels, hasDeclarationQuestion, mappings = [], canAct = true, stageStatus, userNameById, canFillDeclarations = false, savedAnswers }, ref) => {
   const declarationQuestions = questions.filter((q) => q.is_declaration_question);
+  // Declaration answers are editable only while the stage is fillable by the
+  // analyst; once submitted they're read-only (the approver can't edit).
+  const declarationsLocked = !canFillDeclarations;
   const { data: remarksData } = useRemarks();
   const remarkOptions = (remarksData?.items ?? []).map(
     (r: { id: string | number; remark: string }) => ({ label: r.remark, value: Number(r.id), isOthers: r.remark === OTHERS_REMARK })
@@ -132,6 +151,30 @@ export const ApprovalSnip = forwardRef<ApprovalSnipHandle, Props>(
   };
 
   const [answers, setAnswers] = useState<Record<number, any>>({});
+  const [answerErrors, setAnswerErrors] = useState<Record<number, string>>({});
+
+  // Seed declaration answers from the saved values (resuming / approver view),
+  // so they render pre-filled and read-only once submitted.
+  useEffect(() => {
+    if (!savedAnswers) return;
+    const typeByKey = new Map<number, string>(
+      declarationQuestions.map((q) => [q.stage_question_mapping_id, q.answer_type])
+    );
+    const next: Record<number, any> = {};
+    for (const [k, sa] of Object.entries(savedAnswers)) {
+      const key = Number(k);
+      if (!typeByKey.has(key)) continue; // only declaration rows
+      if (sa.question_option_id != null) {
+        next[key] = typeByKey.get(key) === 'Dropdown (multi select)'
+          ? [sa.question_option_id]
+          : sa.question_option_id;
+      } else if (sa.textbox_value) {
+        next[key] = sa.textbox_value;
+      }
+    }
+    setAnswers((prev) => ({ ...next, ...prev }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedAnswers]);
   const [selectedRemarkId, setSelectedRemarkId] = useState<number | null>(null);
   const [remarkText, setRemarkText] = useState('');
   const [remarkError, setRemarkError] = useState<string | null>(null);
@@ -164,7 +207,55 @@ export const ApprovalSnip = forwardRef<ApprovalSnipHandle, Props>(
       setRemarkError(null);
       return true;
     },
-  }), [selectedRemarkId, remarkText, isOthersSelected]);
+    validateDeclarations: () => {
+      // Only the filling analyst answers declaration questions; skip when not
+      // fillable (e.g. an approver viewing — the answers are already saved).
+      if (!canFillDeclarations) return true;
+      const next: Record<number, string> = {};
+      let ok = true;
+      for (const row of declarationQuestions) {
+        const key = row.stage_question_mapping_id;
+        const isNone = row.answer_type === 'None' && !row.has_text_box;
+        if (isNone) continue; // nothing to answer
+        const value = answers[key];
+        const empty =
+          value == null ||
+          (typeof value === 'string' && !value.trim()) ||
+          (Array.isArray(value) && value.length === 0);
+        if (empty) {
+          next[key] = 'This field is required.';
+          ok = false;
+        }
+      }
+      setAnswerErrors(next);
+      return ok;
+    },
+    getDeclarationAnswers: () => {
+      const out: SubmitStageAnswerInput[] = [];
+      for (const row of declarationQuestions) {
+        const key = row.stage_question_mapping_id;
+        const isNone = row.answer_type === 'None' && !row.has_text_box;
+        if (isNone) continue;
+        const value = answers[key];
+        const isSelect = row.answer_type === 'Dropdown (single select)' || row.answer_type === 'Dropdown (multi select)';
+        const optionId = isSelect
+          ? (Array.isArray(value) ? (value[0] ?? null) : (typeof value === 'number' ? value : null))
+          : null;
+        const text = !isSelect && typeof value === 'string' ? value : '';
+        // Skip rows the user didn't fill.
+        if (optionId == null && !text) continue;
+        out.push({
+          stage_question_mapping_id: key,
+          question_id: row.question_id,
+          textbox_value: text,
+          question_option_id: optionId,
+          response_answer: '',
+          helpers: [],
+        });
+      }
+      return out;
+    },
+  }), [selectedRemarkId, remarkText, isOthersSelected, canFillDeclarations, declarationQuestions, answers]);
 
   return (
     <div style={{ paddingTop: '0.75rem' }}>
@@ -261,46 +352,70 @@ export const ApprovalSnip = forwardRef<ApprovalSnipHandle, Props>(
                 const isSingleSelect = row.answer_type === 'Dropdown (single select)';
                 const isNone = row.answer_type === 'None' && !row.has_text_box;
 
-                const responseOpts = (row.response_options || []).map((o) => ({ label: o.label, value: o.id }));
+                // Single/multi-select declaration questions populate from the
+                // question's own options (not its response options).
+                const selectOpts = (row.options || []).map((o) => ({ label: o.label, value: o.id }));
 
                 return (
                   <tr key={key} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '0.5rem 0.75rem', color: '#1e293b' }}>{row.question_title}</td>
                     <td style={{ padding: '0.5rem 0.75rem' }}>
-                      {isNone ? (
-                        <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>N/A</span>
-                      ) : isMultiSelect ? (
-                        <MultiSelect
-                          value={answers[key] || []}
-                          options={responseOpts}
-                          onChange={(e) => setAnswers((p) => ({ ...p, [key]: e.value }))}
-                          placeholder="Select"
-                          filter
-                          display="chip"
-                          className="w-full"
-                          style={{ minHeight: '1.85rem', fontSize: '0.75rem' }}
-                        />
-                      ) : isSingleSelect ? (
-                        <Dropdown
-                          value={answers[key] || null}
-                          options={responseOpts}
-                          onChange={(e) => setAnswers((p) => ({ ...p, [key]: e.value }))}
-                          placeholder="Select"
-                          filter
-                          showClear
-                          className="w-full"
-                          style={{ height: '1.85rem', fontSize: '0.75rem' }}
-                        />
-                      ) : showTextBox ? (
-                        <InputText
-                          value={answers[key] || ''}
-                          onChange={(e) => setAnswers((p) => ({ ...p, [key]: e.target.value }))}
-                          className="w-full"
-                          style={{ height: '1.85rem', fontSize: '0.75rem' }}
-                        />
-                      ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>N/A</span>
-                      )}
+                      {(() => {
+                        const err = answerErrors[key];
+                        const onChangeClear = (value: any) => {
+                          setAnswers((p) => ({ ...p, [key]: value }));
+                          setAnswerErrors((p) => { if (!p[key]) return p; const n = { ...p }; delete n[key]; return n; });
+                        };
+                        if (isNone) {
+                          return <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>N/A</span>;
+                        }
+                        // Read-only once submitted (approver view): show the saved value.
+                        if (declarationsLocked) {
+                          const v = answers[key];
+                          const text = isMultiSelect
+                            ? (Array.isArray(v) ? v : []).map((id) => selectOpts.find((o) => o.value === id)?.label ?? id).join(', ')
+                            : isSingleSelect
+                              ? (selectOpts.find((o) => o.value === v)?.label ?? '')
+                              : (typeof v === 'string' ? v : '');
+                          return <span style={{ color: '#334155', fontSize: '0.78rem' }}>{text || '—'}</span>;
+                        }
+                        const control = isMultiSelect ? (
+                          <MultiSelect
+                            value={answers[key] || []}
+                            options={selectOpts}
+                            onChange={(e) => onChangeClear(e.value)}
+                            filter
+                            display="chip"
+                            className={err ? 'w-full p-invalid' : 'w-full'}
+                            style={{ minHeight: '1.85rem', fontSize: '0.75rem' }}
+                          />
+                        ) : isSingleSelect ? (
+                          <Dropdown
+                            value={answers[key] || null}
+                            options={selectOpts}
+                            onChange={(e) => onChangeClear(e.value)}
+                            filter
+                            showClear
+                            className={err ? 'w-full p-invalid' : 'w-full'}
+                            style={{ height: '1.85rem', fontSize: '0.75rem' }}
+                          />
+                        ) : showTextBox ? (
+                          <InputText
+                            value={answers[key] || ''}
+                            onChange={(e) => onChangeClear(e.target.value)}
+                            className={err ? 'w-full p-invalid' : 'w-full'}
+                            style={{ height: '1.85rem', fontSize: '0.75rem' }}
+                          />
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>N/A</span>
+                        );
+                        return (
+                          <div className="flex flex-column gap-1">
+                            {control}
+                            {err && <small className="qc-validation-error">{err}</small>}
+                          </div>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );

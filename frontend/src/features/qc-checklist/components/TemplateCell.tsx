@@ -5,6 +5,7 @@
  */
 
 import { InputText } from 'primereact/inputtext';
+import { Dropdown, type DropdownChangeEvent } from 'primereact/dropdown';
 import { RadioButton } from 'primereact/radiobutton';
 import { OptionSelector } from './OptionSelector';
 import { QuestionApprovalLabels, type QuestionApprovalAccess } from './QuestionApprovalLabels';
@@ -41,6 +42,9 @@ interface Props {
   onAnswerChange: (value: string) => void;
   response: string;
   onResponseChange: (value: string) => void;
+  /** Selected response-option id (RESPONSE_QUESTION_OPTION column). */
+  responseOption?: number | null;
+  onResponseOptionChange?: (value: number | null) => void;
   helperValues: string[];
   /** Per-helper-index inline error messages (undefined = no error). */
   helperErrors?: (string | undefined)[];
@@ -128,6 +132,8 @@ export const TemplateCell = ({
   onAnswerChange,
   response,
   onResponseChange,
+  responseOption = null,
+  onResponseOptionChange,
   helperValues,
   helperErrors,
   onHelperChange,
@@ -210,6 +216,28 @@ export const TemplateCell = ({
           {rowErr?.response && <small className="qc-validation-error">{rowErr.response}</small>}
         </div>
       );
+
+    case 'RESPONSE_QUESTION_OPTION': {
+      const respOpts = (row.response_options ?? []).map((o) => ({ label: o.label, value: o.id }));
+      if (respOpts.length === 0) {
+        return <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>N/A</span>;
+      }
+      return (
+        <div className="flex flex-column">
+          <Dropdown
+            value={responseOption}
+            options={respOpts}
+            onChange={(e: DropdownChangeEvent) => onResponseOptionChange?.(e.value ?? null)}
+            filter
+            showClear
+            disabled={locked}
+            className={rowErr?.responseOption ? 'w-full p-invalid' : 'w-full'}
+            style={{ height: '1.85rem', fontSize: '0.75rem' }}
+          />
+          {rowErr?.responseOption && <small className="qc-validation-error">{rowErr.responseOption}</small>}
+        </div>
+      );
+    }
 
     case 'ANSWER':
     default: {

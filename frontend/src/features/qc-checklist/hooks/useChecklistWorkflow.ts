@@ -236,6 +236,7 @@ export const useChecklistWorkflow = ({
                   byQuestion[r.stage_question_mapping_id] = {
                     textbox_value: r.textbox_value || '',
                     question_option_id: r.question_option_id,
+                    response_question_option_id: r.response_question_option_id,
                     response_answer: r.response_answer || '',
                   };
                   // question_answer_id -> sqm, so per-question approval mappings
@@ -298,6 +299,7 @@ export const useChecklistWorkflow = ({
       question_id: a.question_id,
       textbox_value: a.textbox_value,
       question_option_id: a.question_option_id,
+      response_question_option_id: a.response_question_option_id ?? null,
       response_answer: a.response_answer,
       product_id: a.product_id ?? null,
       date_time: a.date_time ?? null,
@@ -336,7 +338,11 @@ export const useChecklistWorkflow = ({
     if (!stage) return null;
 
     const ref = snipRefs.current[fsmId];
-    const answers = ref?.getAnswers() ?? [];
+    const gridAnswers = ref?.getAnswers() ?? [];
+    // Declaration answers come from the ApprovalSnip (hidden from the main grid)
+    // and are persisted alongside the stage's grid answers.
+    const declarationAnswers = approvalRefs.current[fsmId]?.getDeclarationAnswers?.() ?? [];
+    const answers = [...gridAnswers, ...declarationAnswers];
     const questionApprovals = ref?.getQuestionApprovals?.() ?? [];
 
     // Remark comes from this stage's approval section (absent on Basic
@@ -368,6 +374,7 @@ export const useChecklistWorkflow = ({
 
     const approvalRef = approvalRefs.current[fsmId];
     if (approvalRef && !approvalRef.validateRemark()) allValid = false;
+    if (approvalRef && !approvalRef.validateDeclarations()) allValid = false;
 
     // On first submit, Basic Details rides along — validate its grid too.
     if (preview) {
@@ -412,6 +419,7 @@ export const useChecklistWorkflow = ({
 
     const approvalRef = approvalRefs.current[fsmId];
     if (approvalRef && !approvalRef.validateRemark()) allValid = false;
+    if (approvalRef && !approvalRef.validateDeclarations()) allValid = false;
 
     if (!allValid) {
       onError('Please fill all required fields and select a remark.');

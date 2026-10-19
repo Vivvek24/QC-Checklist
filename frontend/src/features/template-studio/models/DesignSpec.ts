@@ -17,7 +17,7 @@
  *  - RESPONSE  → YES / NO / N-A radio group (Chromatographic response)
  *  - AQL_LIMIT → AQL limit (auto from the row's picked question)
  */
-export type ColumnRender = 'SERIAL' | 'QUESTION' | 'OPTION' | 'ANSWER' | 'RESPONSE' | 'AQL_LIMIT';
+export type ColumnRender = 'SERIAL' | 'QUESTION' | 'OPTION' | 'ANSWER' | 'RESPONSE' | 'RESPONSE_QUESTION_OPTION' | 'AQL_LIMIT';
 
 export interface ColumnRenderMeta {
   render: ColumnRender;
@@ -32,6 +32,7 @@ export const COLUMN_RENDERS: ColumnRenderMeta[] = [
   { render: 'OPTION', label: 'Select Option', defaultHeader: 'Select Options' },
   { render: 'ANSWER', label: 'Enter Answer', defaultHeader: 'Enter Answer' },
   { render: 'RESPONSE', label: 'Yes / No / N-A', defaultHeader: 'Response' },
+  { render: 'RESPONSE_QUESTION_OPTION', label: 'Response Option (dropdown)', defaultHeader: 'Response' },
   { render: 'AQL_LIMIT', label: 'AQL Limit', defaultHeader: 'AQL Limit' },
 ];
 

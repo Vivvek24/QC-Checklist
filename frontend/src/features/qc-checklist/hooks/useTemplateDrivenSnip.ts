@@ -51,6 +51,8 @@ export interface TemplateDrivenSnipState {
   setAnswers: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   responses: Record<number, string>;
   setResponses: React.Dispatch<React.SetStateAction<Record<number, string>>>;
+  responseOptionSelections: Record<number, number | null>;
+  setResponseOptionSelections: React.Dispatch<React.SetStateAction<Record<number, number | null>>>;
   helpers: Record<number, string[]>;
   setHelpers: React.Dispatch<React.SetStateAction<Record<number, string[]>>>;
   errors: Record<number, RowErrors>;
@@ -93,19 +95,22 @@ export const useTemplateDrivenSnip = ({
   const canAdd = stageStatus === 'Initial' || stageStatus === 'Draft' || stageStatus === 'ReferBack';
 
   // Flatten every question — flat questions or all section questions — so the
-  // answer hook validates/returns the whole stage.
-  const allQuestions: QuestionAnswerPreview[] = hasSection
-    ? sections.flatMap((s) => s.questions)
-    : questions;
+  // answer hook validates/returns the whole stage. Declaration questions are
+  // excluded here: they render + are answered in the ApprovalSnip, not this grid.
+  const allQuestions: QuestionAnswerPreview[] = (
+    hasSection ? sections.flatMap((s) => s.questions) : questions
+  ).filter((q) => !q.is_declaration_question);
 
   // Column-type flags from the union of stage + section columns.
   const unionColumns = hasSection ? sections.flatMap((s) => s.columns) : columns;
-  const { hasOptionColumn, hasAnswerColumn, hasResponseColumn } = useResolvedColumns(unionColumns, isBasicDetails);
+  const { hasOptionColumn, hasAnswerColumn, hasResponseColumn, hasResponseQuestionOptionColumn } =
+    useResolvedColumns(unionColumns, isBasicDetails);
 
   const {
     selections, setSelections,
     answers, setAnswers,
     responses, setResponses,
+    responseOptionSelections, setResponseOptionSelections,
     helpers, setHelpers,
     subSelections, subAnswers, subResponses,
     setSubSelection, setSubAnswer, setSubResponse,
@@ -113,6 +118,7 @@ export const useTemplateDrivenSnip = ({
     validate, getAnswers,
   } = useValidateTemplateAnswers({
     questions: allQuestions, hasOptionColumn, hasAnswerColumn, hasResponseColumn,
+    hasResponseQuestionOptionColumn,
     isBasicDetails, savedAnswers, savedSubAnswers,
   });
 
@@ -182,6 +188,7 @@ export const useTemplateDrivenSnip = ({
     selections, setSelections,
     answers, setAnswers,
     responses, setResponses,
+    responseOptionSelections, setResponseOptionSelections,
     helpers, setHelpers,
     errors, helperErrors, clearError, clearHelperError,
     sapTriggerKey, fetchFromSap, sapLoading, sapError,

@@ -40,6 +40,7 @@ export const useQuestionChoices = (
             hasSubQuestion: q.has_sub_question,
             masterType: q.master_type ?? null,
             options: q.options ?? [],
+            responseOptions: q.response_options ?? [],
             aqlLimit: q.aql_limit ?? '',
             subQuestions: (q.sub_questions ?? []).map((sub) => ({
               id: sub.question_id,
@@ -73,6 +74,7 @@ export const useQuestionChoices = (
           // Options / sub-questions are not on the base master list; they are
           // resolved from preview once the question is mapped. Empty here.
           options: [],
+          responseOptions: [],
           aqlLimit: '',
           subQuestions: [],
         }
