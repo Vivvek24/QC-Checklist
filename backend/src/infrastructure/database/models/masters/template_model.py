@@ -55,6 +55,10 @@ class TemplateLayoutColumnModel(BaseModel):
         nullable=True,
         index=True,
     )
+    # True => this column belongs to the stage's DECLARATION grid (rendered in
+    # ApprovalSnip) rather than its normal question grid. Lets one stage carry
+    # two independent column sets, both scoped to the same fsm/section.
+    is_declaration: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     header: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     column_type: Mapped[str] = mapped_column(String(30), nullable=False, default="ANSWER")
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

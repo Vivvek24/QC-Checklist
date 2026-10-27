@@ -18,6 +18,8 @@ export interface QuestionAnswerPreview {
   section_name: string | null;
   show_on_grid: boolean;
   answer_type: string;
+  /** For answer_type "Masters": which master this question draws from (e.g. "Product Master"). */
+  master_type: string | null;
   has_text_box: boolean;
   has_multiple_text_box: boolean;
   has_sub_question: boolean;
@@ -27,11 +29,24 @@ export interface QuestionAnswerPreview {
   is_editable: boolean;
   /** When true, this question carries its own approval labels (approval_labels). */
   is_approvable: boolean;
+  /** When true, picking a product on the same stage auto-fills this question's
+   * answer with the product's storage conditions. */
+  has_associated_master: boolean;
+  /** When true, the "+ Add" helper button runs the calculated-answer flow
+   * (positive-integer validation + running total). */
+  is_calculated: boolean;
+  /** Custom answer behaviour (e.g. "Calculate_SampleConsumed"), configured per
+   * row in Template Studio. Null when none. */
+  custom_answers: string | null;
   sub_questions: QuestionAnswerPreview[];
   options: { id: number; label: string }[];
   response_options: { id: number; label: string }[];
   /** Approval labels configured for this question (empty unless is_approvable). */
   approval_labels: ApprovalLabelPreview[];
+  /** Set only for auto-generated per-test rows (TEST_TITLE / SAMPLE_VIAL
+   * columns). Absent for normal configured questions. */
+  test_title?: string;
+  sample_vails?: string;
 }
 
 export interface ApprovalLabelPreview {
@@ -69,6 +84,8 @@ export interface ChecklistStagePreview {
   sections: SectionPreview[];
   approval_labels: ApprovalLabelPreview[];
   columns: ColumnPreview[];
+  /** The stage's declaration-grid column layout (rendered in ApprovalSnip). */
+  declaration_columns: ColumnPreview[];
 }
 
 export interface ChecklistPreview {

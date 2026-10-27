@@ -62,6 +62,8 @@ export interface ChecklistStagePreview {
   sections: SectionPreview[];
   approval_labels: { approval_label_id: number; label: string }[];
   columns: ColumnPreview[];
+  /** The stage's declaration-grid column layout. */
+  declaration_columns: ColumnPreview[];
 }
 
 export interface ChecklistPreview {

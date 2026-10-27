@@ -1387,3 +1387,164 @@ h2 {
 .qc-dashboard .p-datatable .p-datatable-thead > tr > th.qc-frozen-col { background: #eef2f7; z-index: 2; }
 .qc-dashboard .p-datatable .p-row-odd .qc-frozen-col { background: #f8fafc; }
 .qc-dashboard .p-datatable .qc-frozen-col { box-shadow: inset -1px 0 0 #e9ecef; }
+/* Scrollable body height: fill the viewport minus the surrounding chrome
+   (header, KPI cards, card padding, toolbar). */
+.qc-dashboard .p-datatable-wrapper,
+.qc-dashboard .p-datatable .p-datatable-wrapper {
+  max-height: calc(100vh - 320px);
+}
+
+
+/* ─── Create Request grid inputs (TemplateDrivenSnip / TemplateCell) ───
+   Columns keep their configured width (the grid uses table-layout: fixed);
+   long content grows the field's HEIGHT instead of widening the column. */
+
+/* Auto-growing answer / helper / sub-question text fields. */
+.qc-grid-input.p-inputtextarea {
+  min-height: 1.85rem;
+  font-size: 0.75rem;
+  resize: none;
+  line-height: 1.35;
+  overflow: hidden; /* autoResize manages the height */
+}
+
+/* Dropdowns inside the grid: let the selected label wrap over multiple lines
+   so the trigger grows taller rather than clipping. Overrides the global
+   single-line ellipsis rule for these specific dropdowns. */
+.qc-grid-dropdown.p-dropdown {
+  height: auto;
+  min-height: 1.85rem;
+  display: flex;
+  align-items: center;
+}
+
+.qc-grid-dropdown.p-dropdown .p-dropdown-label {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  padding: 0.35rem 0.5rem;
+}
+
+/* MultiSelect inside the grid: chips wrap and the control grows taller. */
+.qc-grid-dropdown.p-multiselect {
+  height: auto;
+  min-height: 1.85rem;
+}
+
+.qc-grid-dropdown.p-multiselect .p-multiselect-label {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: break-word;
+  line-height: 1.35;
+  padding: 0.3rem 0.5rem;
+}
+
+
+/* Font size parity for grid dropdowns (previously an inline style). */
+.qc-grid-dropdown.p-dropdown,
+.qc-grid-dropdown.p-multiselect {
+  font-size: 0.75rem;
+}
+
+/* SAP-lookup spinner next to the answer field. */
+.qc-grid-spinner.pi {
+  font-size: 0.8rem;
+  color: var(--color-primary);
+  margin-top: 0.4rem;
+}
+
+
+/* Grid Date & Time picker — a normal single-line date input (not a growing
+   text field). The icon button is small (matches the field height) and sits
+   with a small gap after the field. */
+.qc-grid-calendar.p-calendar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.qc-grid-calendar.p-calendar .p-inputtext {
+  flex: 1;
+  min-width: 0;
+  height: 1.85rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  resize: none;
+  border-radius: var(--radius-md);
+}
+
+/* Small square icon button, same height as the field, detached from it. */
+.qc-grid-calendar.p-calendar .p-datepicker-trigger.p-button {
+  flex: 0 0 auto;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.qc-grid-calendar.p-calendar .p-datepicker-trigger.p-button .p-button-icon {
+  font-size: 0.8rem;
+}
+
+
+/* Grid Date & Time picker panel — compact calendar + time overlay. */
+.qc-grid-calendar-panel.p-datepicker {
+  font-size: 0.75rem;
+  padding: 0.4rem;
+  width: auto;
+  min-width: unset;
+}
+
+.qc-grid-calendar-panel.p-datepicker .p-datepicker-header {
+  padding: 0.3rem 0.25rem;
+}
+
+.qc-grid-calendar-panel.p-datepicker .p-datepicker-title {
+  font-size: 0.78rem;
+}
+
+/* Prev/next month + title buttons — smaller. */
+.qc-grid-calendar-panel.p-datepicker .p-datepicker-prev,
+.qc-grid-calendar-panel.p-datepicker .p-datepicker-next {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+/* Day grid — tighter cells. */
+.qc-grid-calendar-panel.p-datepicker table {
+  margin: 0.15rem 0;
+  font-size: 0.72rem;
+}
+
+.qc-grid-calendar-panel.p-datepicker table th,
+.qc-grid-calendar-panel.p-datepicker table td {
+  padding: 0.1rem;
+}
+
+.qc-grid-calendar-panel.p-datepicker table td > span {
+  width: 1.75rem;
+  height: 1.75rem;
+  font-size: 0.72rem;
+}
+
+/* Time picker row — smaller controls and spinners. */
+.qc-grid-calendar-panel.p-datepicker .p-timepicker {
+  padding: 0.3rem 0;
+  font-size: 0.8rem;
+}
+
+.qc-grid-calendar-panel.p-datepicker .p-timepicker button {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.qc-grid-calendar-panel.p-datepicker .p-timepicker span {
+  font-size: 0.8rem;
+}

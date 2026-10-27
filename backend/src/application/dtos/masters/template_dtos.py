@@ -32,6 +32,8 @@ class ReplaceColumnsForScopeDTO:
     format_stage_mapping_id: int
     section_id: int | None
     columns: list[ColumnInputDTO] = field(default_factory=list)
+    # True => replace the scope's DECLARATION column set rather than its normal one.
+    is_declaration: bool = False
 
 
 @dataclass(frozen=True)
@@ -45,3 +47,4 @@ class TemplateLayoutColumnDTO:
     display_order: int
     width: str | None
     is_required: bool
+    is_declaration: bool = False

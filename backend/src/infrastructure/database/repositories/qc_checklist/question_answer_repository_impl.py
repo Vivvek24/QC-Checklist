@@ -1,27 +1,45 @@
 """QuestionAnswer — repository implementation."""
 
-from typing import Any
-
-from sqlalchemy import ColumnElement, Select, func, select
+from sqlalchemy import ColumnElement, func, select
+from sqlalchemy.orm import aliased
 
 from src.domain.entities.qc_checklist.question_answer import QuestionAnswer
-from src.domain.repositories.qc_checklist.question_answer_repository import IQuestionAnswerRepository
-from src.infrastructure.database.models.qc_checklist.question_answer_model import QuestionAnswerModel
+from src.domain.repositories.qc_checklist.question_answer_repository import (
+    IQuestionAnswerRepository,
+)
+from src.infrastructure.database.models.qc_checklist.question_answer_helper_model import (
+    QuestionAnswerHelperModel,
+)
+from src.infrastructure.database.models.qc_checklist.question_answer_model import (
+    QuestionAnswerModel,
+)
 from src.infrastructure.database.models.qc_checklist.question_answer_sub_question_answer_model import (  # noqa: E501
     QuestionAnswerSubQuestionAnswerModel,
 )
+from src.infrastructure.database.models.user_details_model import UserDetailsModel
+from src.infrastructure.database.models.user_model import UserModel
 from src.infrastructure.database.repositories.base_repository_impl import SqlAlchemyRepository
 
 
-class QuestionAnswerRepositoryImpl(SqlAlchemyRepository[QuestionAnswer, QuestionAnswerModel], IQuestionAnswerRepository):
+class QuestionAnswerRepositoryImpl(
+    SqlAlchemyRepository[QuestionAnswer, QuestionAnswerModel], IQuestionAnswerRepository
+):
     _model = QuestionAnswerModel
 
     @staticmethod
     def _code_equals(code: str) -> ColumnElement[bool]:
         return QuestionAnswerModel.id == -1
 
-    async def list_all(self, skip: int = 0, limit: int = 100, search: str | None = None, is_active: bool | None = None) -> list[QuestionAnswer]:
-        stmt = select(QuestionAnswerModel).order_by(QuestionAnswerModel.id.desc()).offset(skip).limit(limit)
+    async def list_all(
+        self, skip: int = 0, limit: int = 100,
+        search: str | None = None, is_active: bool | None = None,
+    ) -> list[QuestionAnswer]:
+        stmt = (
+            select(QuestionAnswerModel)
+            .order_by(QuestionAnswerModel.id.desc())
+            .offset(skip)
+            .limit(limit)
+        )
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
@@ -40,7 +58,9 @@ class QuestionAnswerRepositoryImpl(SqlAlchemyRepository[QuestionAnswer, Question
         result = await self._session.execute(stmt)
         return [self._to_entity(m) for m in result.scalars().all()]
 
-    async def list_by_stage_question_mapping(self, stage_question_mapping_id: int) -> list[QuestionAnswer]:
+    async def list_by_stage_question_mapping(
+        self, stage_question_mapping_id: int
+    ) -> list[QuestionAnswer]:
         stmt = select(QuestionAnswerModel).where(
             QuestionAnswerModel.stage_question_mapping_id == stage_question_mapping_id
         ).order_by(QuestionAnswerModel.serial_number)
@@ -50,7 +70,8 @@ class QuestionAnswerRepositoryImpl(SqlAlchemyRepository[QuestionAnswer, Question
     async def delete_sub_answers_by_parent(self, parent_question_answer_id: int) -> None:
         link_result = await self._session.execute(
             select(QuestionAnswerSubQuestionAnswerModel).where(
-                QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id == parent_question_answer_id
+                QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id
+                == parent_question_answer_id
             )
         )
         links = link_result.scalars().all()
@@ -137,6 +158,65 @@ class QuestionAnswerRepositoryImpl(SqlAlchemyRepository[QuestionAnswer, Question
         model.modified_date = entity.modified_date
         await self._session.flush()
         return self._to_entity(model)
+
+    async def list_sub_answers_grouped(
+        self, checklist_stage_id: int
+    ) -> dict[int, list[tuple[int, int | None, int | None, str, str]]]:
+        parent = aliased(QuestionAnswerModel)
+        child = aliased(QuestionAnswerModel)
+        stmt = (
+            select(
+                parent.question_id,
+                child.question_id,
+                child.question_option_id,
+                child.response_question_option_id,
+                child.textbox_value,
+                child.response_answer,
+            )
+            .select_from(QuestionAnswerSubQuestionAnswerModel)
+            .join(
+                parent,
+                parent.id == QuestionAnswerSubQuestionAnswerModel.question_answer_parent_id,
+            )
+            .join(child, child.id == QuestionAnswerSubQuestionAnswerModel.question_answer_id)
+            .where(parent.checklist_stage_id == checklist_stage_id)
+            .order_by(parent.question_id, child.id)
+        )
+        rows = (await self._session.execute(stmt)).all()
+        grouped: dict[int, list[tuple[int, int | None, int | None, str, str]]] = {}
+        for parent_qid, qid, opt_id, resp_opt_id, textbox, resp_answer in rows:
+            grouped.setdefault(parent_qid, []).append(
+                (qid, opt_id, resp_opt_id, textbox or "", resp_answer or "")
+            )
+        return grouped
+
+    async def resolve_user_names(self, user_ids: set[int]) -> dict[int, str]:
+        if not user_ids:
+            return {}
+        rows = (await self._session.execute(
+            select(UserModel.id, UserModel.username, UserDetailsModel.employee_name)
+            .outerjoin(UserDetailsModel, UserDetailsModel.user_id == UserModel.id)
+            .where(UserModel.id.in_(user_ids))
+        )).all()
+        return {r.id: (r.employee_name or r.username or "") for r in rows}
+
+    async def list_helpers_by_answer_ids(
+        self, answer_ids: list[int]
+    ) -> dict[int, list[str]]:
+        if not answer_ids:
+            return {}
+        rows = (await self._session.execute(
+            select(
+                QuestionAnswerHelperModel.question_answer_id,
+                QuestionAnswerHelperModel.text_box_value,
+            )
+            .where(QuestionAnswerHelperModel.question_answer_id.in_(answer_ids))
+            .order_by(QuestionAnswerHelperModel.id)
+        )).all()
+        out: dict[int, list[str]] = {}
+        for answer_id, value in rows:
+            out.setdefault(answer_id, []).append(value or "")
+        return out
 
     @staticmethod
     def _to_entity(model: QuestionAnswerModel) -> QuestionAnswer:

@@ -3,8 +3,14 @@
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.infrastructure.database.models.role_model import RoleAssignmentModel, RoleModel
+
+# Role names that are treated as admins — they see every request on the
+# dashboard regardless of the approval-label role scoping.
+ADMIN_ROLE_NAMES = ("Administrator", "UnitAdmin")
 
 
 @dataclass
@@ -27,6 +33,38 @@ class DashboardRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        # Batch cache for the button-visibility loop. When primed (via
+        # prime_button_visibility) the per-request getters read from these dicts
+        # instead of issuing one query each — turning the dashboard's N+1 into a
+        # handful of batch queries. Unprimed, every getter falls back to its own
+        # query, so other callers behave exactly as before.
+        self._bv_primed: bool = False
+        self._bv_request: dict[str, tuple] = {}          # request_number -> (id, format_id)
+        self._bv_format_type: dict[int, str] = {}        # format_id -> format_type
+        self._bv_latest_stage: dict[int, tuple] = {}     # request_id -> (id, status, user_id)
+        self._bv_mappings: dict[int, list[tuple]] = {}   # stage_id -> [mapping tuples]
+        self._bv_label_roles: dict[int, list[int]] = {}  # approval_label_id -> [role_id]
+        self._bv_unissued: dict[int, bool] = {}          # stage_id -> has_unissued_vials
+
+    async def get_user_role_context(self, user_id: int) -> tuple[int | None, bool]:
+        """Resolve a user's active role for dashboard scoping: returns
+        (role_id, is_admin). role_id is the user's first active assignment (or
+        None); is_admin is True when that role is one of ADMIN_ROLE_NAMES."""
+        role_id = (await self._session.execute(
+            select(RoleAssignmentModel.role_id)
+            .where(
+                RoleAssignmentModel.user_id == user_id,
+                RoleAssignmentModel.is_active.is_(True),
+            )
+            .limit(1)
+        )).scalar_one_or_none()
+        if role_id is None:
+            return None, False
+
+        role_name = (await self._session.execute(
+            select(RoleModel.name).where(RoleModel.id == role_id)
+        )).scalar_one_or_none()
+        return role_id, bool(role_name and role_name in ADMIN_ROLE_NAMES)
 
     async def fetch_dashboard_rows(
         self,
@@ -100,8 +138,6 @@ FROM (
         ON qo.id = qa.question_option_id
     LEFT JOIN products p
         ON p.id = qa.product_id
-        AND q.answer_type = 'Masters'
-        AND q.master_type = 'ProductMaster'
     WHERE cr.is_removed = false
         AND cr.is_last_stage = :is_last_stage
 """
@@ -205,6 +241,8 @@ WHERE cr.is_removed = false
 
     async def get_request_by_number(self, request_number: str) -> tuple | None:
         """Get checklist request id and format_id by request_number."""
+        if self._bv_primed:
+            return self._bv_request.get(request_number)
         result = await self._session.execute(text(
             "SELECT id, format_id FROM checklist_requests WHERE request_number = :rn"
         ), {"rn": request_number})
@@ -212,6 +250,8 @@ WHERE cr.is_removed = false
 
     async def get_format_type(self, format_id: int) -> str:
         """Get format_type by format id."""
+        if self._bv_primed:
+            return self._bv_format_type.get(format_id, "")
         result = await self._session.execute(text(
             "SELECT format_type FROM formats WHERE id = :fid"
         ), {"fid": format_id})
@@ -220,6 +260,8 @@ WHERE cr.is_removed = false
 
     async def get_latest_active_stage(self, request_id: int) -> tuple | None:
         """Get latest active stage (id, status, user_id) for a request."""
+        if self._bv_primed:
+            return self._bv_latest_stage.get(request_id)
         result = await self._session.execute(text("""
             SELECT cs.id, cs.status, cs.user_id
             FROM checklist_stages cs
@@ -232,6 +274,8 @@ WHERE cr.is_removed = false
 
     async def get_stage_approval_label_mappings(self, stage_id: int) -> list[tuple]:
         """Get all StageApprovalLabelMappings for a stage, ordered by id."""
+        if self._bv_primed:
+            return self._bv_mappings.get(stage_id, [])
         result = await self._session.execute(text("""
             SELECT salm.id, salm.approval_label_id, salm.user_id, salm.date_of_action, salm.is_refer_back
             FROM stage_approval_label_mappings salm
@@ -242,6 +286,8 @@ WHERE cr.is_removed = false
 
     async def get_approval_label_role_ids(self, approval_label_id: int) -> list[int]:
         """Get role ids linked to an approval label."""
+        if self._bv_primed:
+            return self._bv_label_roles.get(approval_label_id, [])
         result = await self._session.execute(text("""
             SELECT alur.role_id
             FROM approval_label_user_roles alur
@@ -268,16 +314,136 @@ WHERE cr.is_removed = false
         return row[0] if row else None
 
     async def has_not_issued_vails(self, stage_id: int) -> bool:
-        """Check if stage has question answers with hasVails=true but no receivedByDate (not issued)."""
+        """Check if stage has question answers with hasVails=true but no receivedByDate (not issued).
+
+        Uses a LEFT JOIN because the auto-generated test rows (the ones that
+        carry has_vails) have stage_question_mapping_id = NULL — an INNER JOIN
+        would wrongly drop them and report "all vials issued". A NULL mapping is
+        treated as NOT a declaration question.
+        """
+        if self._bv_primed:
+            return self._bv_unissued.get(stage_id, False)
         result = await self._session.execute(text("""
             SELECT EXISTS (
                 SELECT 1
                 FROM question_answers qa
-                JOIN stage_question_mappings sqm ON sqm.id = qa.stage_question_mapping_id
+                LEFT JOIN stage_question_mappings sqm ON sqm.id = qa.stage_question_mapping_id
                 WHERE qa.checklist_stage_id = :sid
-                    AND sqm.is_declaration_question = false
+                    AND COALESCE(sqm.is_declaration_question, false) = false
                     AND qa.received_by_date IS NULL
                     AND qa.has_vails = true
             )
         """), {"sid": stage_id})
         return result.scalar() or False
+
+    async def prime_button_visibility(self, request_numbers: list[str]) -> None:
+        """Batch-load everything the button-visibility loop needs for the given
+        requests, so the per-request getters serve from memory (one query each
+        instead of N). The decision logic is unchanged — it just reads cached
+        data. Safe to call with an empty list (no-op prime)."""
+        # Reset + mark primed even when empty, so getters return cached misses
+        # (None/[]/"") rather than silently querying per request.
+        self._bv_request = {}
+        self._bv_format_type = {}
+        self._bv_latest_stage = {}
+        self._bv_mappings = {}
+        self._bv_label_roles = {}
+        self._bv_unissued = {}
+        self._bv_primed = True
+        if not request_numbers:
+            return
+
+        # 1) requests → (id, format_id)
+        req_rows = (await self._session.execute(
+            text(
+                "SELECT request_number, id, format_id FROM checklist_requests "
+                "WHERE request_number = ANY(:rns)"
+            ),
+            {"rns": request_numbers},
+        )).fetchall()
+        request_ids: list[int] = []
+        format_ids: set[int] = set()
+        for r in req_rows:
+            self._bv_request[r.request_number] = (r.id, r.format_id)
+            request_ids.append(r.id)
+            if r.format_id is not None:
+                format_ids.add(r.format_id)
+
+        # 2) format_id → format_type
+        if format_ids:
+            for r in (await self._session.execute(
+                text("SELECT id, format_type FROM formats WHERE id = ANY(:fids)"),
+                {"fids": list(format_ids)},
+            )).fetchall():
+                self._bv_format_type[r.id] = r.format_type or ""
+
+        if not request_ids:
+            return
+
+        # 3) latest active stage per request (mirror: status filter + id DESC,
+        #    pick first per request via DISTINCT ON).
+        stage_rows = (await self._session.execute(
+            text("""
+                SELECT DISTINCT ON (cs.checklist_request_id)
+                    cs.checklist_request_id AS rid, cs.id, cs.status, cs.user_id
+                FROM checklist_stages cs
+                WHERE cs.checklist_request_id = ANY(:rids)
+                    AND cs.status IN ('Pending','Draft','SaveAsDraft','ReferBack','Initial','Saved')
+                ORDER BY cs.checklist_request_id, cs.id DESC
+            """),
+            {"rids": request_ids},
+        )).fetchall()
+        stage_ids: list[int] = []
+        for r in stage_rows:
+            self._bv_latest_stage[r.rid] = (r.id, r.status, r.user_id)
+            stage_ids.append(r.id)
+
+        if not stage_ids:
+            return
+
+        # 4) approval-label mappings per stage (ordered by id, as the loop needs)
+        label_ids: set[int] = set()
+        for r in (await self._session.execute(
+            text("""
+                SELECT salm.checklist_stage_id AS sid, salm.id, salm.approval_label_id,
+                       salm.user_id, salm.date_of_action, salm.is_refer_back
+                FROM stage_approval_label_mappings salm
+                WHERE salm.checklist_stage_id = ANY(:sids)
+                ORDER BY salm.checklist_stage_id, salm.id
+            """),
+            {"sids": stage_ids},
+        )).fetchall():
+            self._bv_mappings.setdefault(r.sid, []).append(
+                (r.id, r.approval_label_id, r.user_id, r.date_of_action, r.is_refer_back)
+            )
+            if r.approval_label_id is not None:
+                label_ids.add(r.approval_label_id)
+
+        # 5) role ids per approval label
+        if label_ids:
+            for r in (await self._session.execute(
+                text(
+                    "SELECT approval_label_id, role_id FROM approval_label_user_roles "
+                    "WHERE approval_label_id = ANY(:lids)"
+                ),
+                {"lids": list(label_ids)},
+            )).fetchall():
+                self._bv_label_roles.setdefault(r.approval_label_id, []).append(r.role_id)
+
+        # 6) unissued-vials flag per stage (same rule as has_not_issued_vails)
+        for r in (await self._session.execute(
+            text("""
+                SELECT cs_id AS sid, bool_or(unissued) AS has_unissued FROM (
+                    SELECT qa.checklist_stage_id AS cs_id,
+                        (qa.has_vails = true
+                         AND qa.received_by_date IS NULL
+                         AND COALESCE(sqm.is_declaration_question, false) = false) AS unissued
+                    FROM question_answers qa
+                    LEFT JOIN stage_question_mappings sqm ON sqm.id = qa.stage_question_mapping_id
+                    WHERE qa.checklist_stage_id = ANY(:sids)
+                ) t
+                GROUP BY cs_id
+            """),
+            {"sids": stage_ids},
+        )).fetchall():
+            self._bv_unissued[r.sid] = bool(r.has_unissued)

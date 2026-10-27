@@ -69,6 +69,10 @@ class _QuestionMetadata:
         q = self.by_id.get(qid)
         return q.answer_type.value if q else ""
 
+    def master_type(self, qid: int) -> str | None:
+        q = self.by_id.get(qid)
+        return q.master_type.value if q and q.master_type else None
+
     def has_text_box(self, qid: int) -> bool:
         q = self.by_id.get(qid)
         return q.has_text_box if q else False
@@ -84,6 +88,14 @@ class _QuestionMetadata:
     def is_approvable(self, qid: int) -> bool:
         q = self.by_id.get(qid)
         return q.is_approvable if q else False
+
+    def has_associated_master(self, qid: int) -> bool:
+        q = self.by_id.get(qid)
+        return q.has_associated_master if q else False
+
+    def is_calculated(self, qid: int) -> bool:
+        q = self.by_id.get(qid)
+        return q.is_calculated if q else False
 
 
 def _to_column_preview(c: TemplateLayoutColumn) -> ColumnPreviewDTO:
@@ -171,6 +183,7 @@ class ChecklistPreviewService:
                     section_name=None,
                     show_on_grid=False,
                     answer_type=sub_meta.answer_type(sid),
+                    master_type=sub_meta.master_type(sid),
                     has_text_box=sub_meta.has_text_box(sid),
                     has_multiple_text_box=sub_meta.has_multiple_text_box(sid),
                     has_sub_question=False,
@@ -207,6 +220,7 @@ class ChecklistPreviewService:
             section_name=section_name,
             show_on_grid=sqm.show_on_grid,
             answer_type=meta.answer_type(qid),
+            master_type=meta.master_type(qid),
             has_text_box=meta.has_text_box(qid),
             has_multiple_text_box=meta.has_multiple_text_box(qid),
             has_sub_question=meta.has_sub_question(qid),
@@ -219,6 +233,8 @@ class ChecklistPreviewService:
             is_editable=sqm.is_editable,
             custom_answers=sqm.custom_answers.value if sqm.custom_answers else None,
             is_approvable=meta.is_approvable(qid),
+            has_associated_master=meta.has_associated_master(qid),
+            is_calculated=meta.is_calculated(qid),
             sub_questions=sub_questions_map.get(qid, []),
             options=meta.options.get(qid, []),
             response_options=meta.response_options.get(qid, []),
@@ -246,7 +262,12 @@ class ChecklistPreviewService:
 
     async def build_questions_for_stage(
         self, fsm_id: int, has_section: bool
-    ) -> tuple[list[QuestionAnswerPreviewDTO], list[SectionPreviewDTO], list[ColumnPreviewDTO]]:
+    ) -> tuple[
+        list[QuestionAnswerPreviewDTO],
+        list[SectionPreviewDTO],
+        list[ColumnPreviewDTO],
+        list[ColumnPreviewDTO],
+    ]:
         """
         Given a format_stage_mapping_id, builds:
         - questions list (non-sectioned questions)
@@ -261,10 +282,22 @@ class ChecklistPreviewService:
         approval_labels_map = await self._build_question_approval_labels_map(q_ids, meta)
 
         all_columns = await self._column_repo.list_for_stage(fsm_id)
-        stage_columns = [_to_column_preview(c) for c in all_columns if c.section_id is None]
+        # Stage-level columns split by purpose: the normal question grid vs the
+        # declaration-questions grid (ApprovalSnip). Section columns are always
+        # normal (declarations are never sectioned).
+        stage_columns = [
+            _to_column_preview(c)
+            for c in all_columns
+            if c.section_id is None and not c.is_declaration
+        ]
+        declaration_columns = [
+            _to_column_preview(c)
+            for c in all_columns
+            if c.section_id is None and c.is_declaration
+        ]
         columns_by_section: dict[int, list[ColumnPreviewDTO]] = {}
         for c in all_columns:
-            if c.section_id is not None:
+            if c.section_id is not None and not c.is_declaration:
                 columns_by_section.setdefault(c.section_id, []).append(_to_column_preview(c))
 
         section_map: dict[int, str] = {}
@@ -298,7 +331,7 @@ class ChecklistPreviewService:
                 approval_labels_map,
             ))
 
-        return questions, sections_preview, stage_columns
+        return questions, sections_preview, stage_columns, declaration_columns
 
     async def get_preview(self, format_id: int) -> ChecklistPreviewDTO:
         """
@@ -326,7 +359,7 @@ class ChecklistPreviewService:
         checklist_stages: list[ChecklistStagePreviewDTO] = []
 
         for idx, fsm in enumerate(format_stage_mappings):
-            questions, sections_preview, stage_columns = await self.build_questions_for_stage(
+            questions, sections_preview, stage_columns, declaration_columns = await self.build_questions_for_stage(
                 fsm.id, fsm.has_section
             )
 
@@ -346,6 +379,7 @@ class ChecklistPreviewService:
                 sections=sections_preview,
                 approval_labels=approval_labels,
                 columns=stage_columns,
+                declaration_columns=declaration_columns,
             ))
 
         return ChecklistPreviewDTO(

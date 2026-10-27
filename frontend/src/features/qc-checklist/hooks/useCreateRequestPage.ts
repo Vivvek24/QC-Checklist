@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { Toast } from 'primereact/toast';
 import { useFormats } from '../../masters/hooks/useFormats';
-import { useMenuPermission } from '@core/rbac/usePermissions';
+import { useMenuPermission, useMenuPermissions } from '@core/rbac/usePermissions';
 import { useChecklistWorkflow, type UseChecklistWorkflowResult } from './useChecklistWorkflow';
 import { useUserNameResolver } from './useUserNameResolver';
 
@@ -39,6 +39,11 @@ export const useCreateRequestPage = (): UseCreateRequestPageResult => {
 
   const { data: formatsData, isLoading: formatsLoading } = useFormats();
   const [selectedFormatId, setSelectedFormatId] = useState<number | null>(null);
+  // Ensure the user's menu permissions are loaded on this page — the fill page
+  // can be opened directly (without the nav rendering first), and the Issue
+  // Vials button gate (useMenuPermission('qc_checklist.issue_vials')) depends
+  // on them. This hook self-fetches once and is loop-safe.
+  useMenuPermissions();
   const { canAccess: canInitiate } = useMenuPermission('qc_checklist');
   const userNameById = useUserNameResolver();
 

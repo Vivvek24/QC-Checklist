@@ -70,7 +70,7 @@ class TemplateStageSaveService:
         for section_id in dto.deleted_section_ids:
             await self._section_repo.delete(section_id)
 
-        # Stage-level rows + columns.
+        # Stage-level rows + columns (normal grid).
         saved_rows = await self._save_rows(dto.rows, format_stage_mapping_id, None, actor)
         await self._template_service.replace_columns_for_scope(
             ReplaceColumnsForScopeDTO(
@@ -78,6 +78,17 @@ class TemplateStageSaveService:
                 format_stage_mapping_id=format_stage_mapping_id,
                 section_id=None,
                 columns=[self._to_column_input(c) for c in dto.columns],
+            ),
+            actor,
+        )
+        # Stage-level declaration-grid columns (rendered in ApprovalSnip).
+        await self._template_service.replace_columns_for_scope(
+            ReplaceColumnsForScopeDTO(
+                format_id=dto.format_id,
+                format_stage_mapping_id=format_stage_mapping_id,
+                section_id=None,
+                columns=[self._to_column_input(c) for c in dto.declaration_columns],
+                is_declaration=True,
             ),
             actor,
         )

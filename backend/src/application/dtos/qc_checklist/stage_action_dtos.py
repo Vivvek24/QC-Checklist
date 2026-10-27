@@ -33,6 +33,10 @@ class QuestionAnswerPayload:
     product_id: int | None = None
     date_time: str | None = None
     helpers: list[str] | None = None
+    # Calculated-question accumulation: the parent textbox is cleared, the
+    # values live in helpers, and the running total rides here.
+    has_helper: bool = False
+    answer_total_vails: int = 0
     sub_answers: list[SubAnswerPayload] | None = None
 
 

@@ -82,6 +82,34 @@ class UserService:
             limit=limit,
         )
 
+    async def list_users_by_role_code(self, role_code: str) -> UserListDTO:
+        """Active users assigned the role with the given code (e.g. 'ANALYST')."""
+        role = await self._roles.get_by_code(role_code)
+        if role is None:
+            return UserListDTO(users=[], total=0, skip=0, limit=0)
+
+        user_ids = await self._assignments.list_active_user_ids_for_role(role.id)
+        if not user_ids:
+            return UserListDTO(users=[], total=0, skip=0, limit=0)
+
+        details = await self._details.get_many_by_user_ids(user_ids)
+        last_logins = await self._audit.latest_timestamp_by_actor(
+            str(AuditAction.LOGIN_SUCCESS), user_ids
+        )
+        users = []
+        for uid in user_ids:
+            user = await self._users.get_by_id(uid)
+            if user is None or not user.is_active:
+                continue
+            users.append(
+                self._to_dto(
+                    user,
+                    details=details.get(user.id),
+                    last_login=last_logins.get(user.id),
+                )
+            )
+        return UserListDTO(users=users, total=len(users), skip=0, limit=len(users))
+
     # ─── Create User ───
 
     async def create_user(self, dto: CreateUserDTO, actor: User) -> UserDTO:

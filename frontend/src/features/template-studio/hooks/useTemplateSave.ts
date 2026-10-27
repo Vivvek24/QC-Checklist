@@ -106,6 +106,9 @@ export const useTemplateSave = ({
       if (!stage.hasSection && !checkRows(stage.rows)) {
         return `"${stageLabel}" has a row with no question selected, or the same question selected twice.`;
       }
+      if ((stage.declarationRows?.length ?? 0) > 0 && !checkRows(stage.declarationRows)) {
+        return `"${stageLabel} → Declaration Grid" has a row with no question selected, or the same question selected twice.`;
+      }
       for (const section of stage.sections) {
         if (!checkRows(section.rows)) {
           const sectionLabel = section.sectionName || 'Untitled Section';
@@ -141,11 +144,24 @@ export const useTemplateSave = ({
       })),
     }));
 
+    // Normal grid rows first, then the declaration grid's rows — both live in
+    // stage_question_mappings, distinguished by is_declaration_question. They
+    // go in one `rows` payload (backend scopes columns separately via
+    // declaration_columns). Results map back by this same order.
+    const normalRows = stage.rows;
+    const declRows = (stage.declarationRows ?? []).map((r) => ({ ...r, isDeclaration: true }));
+
     const result = await templateApi.saveStage({
       format_id: formatIdValue,
       stage_id: stage.stageId,
-      rows: stage.rows.map(toRowInput),
+      rows: [...normalRows, ...declRows].map(toRowInput),
       columns: stage.columns.map((c) => ({
+        header: c.header,
+        column_type: c.render,
+        width: c.width ?? null,
+        is_required: c.required ?? false,
+      })),
+      declaration_columns: (stage.declarationColumns ?? []).map((c) => ({
         header: c.header,
         column_type: c.render,
         width: c.width ?? null,
@@ -157,10 +173,15 @@ export const useTemplateSave = ({
     });
 
     // Fill in mappingId/sectionId for anything that was newly created, using
-    // the backend's returned ids in the same order the rows/sections were sent.
-    const savedRows: DesignRow[] = stage.rows.map((row, i) => ({
+    // the backend's returned ids in the same order the rows were sent (normal
+    // rows first, then declaration rows).
+    const savedRows: DesignRow[] = normalRows.map((row, i) => ({
       ...row,
       mappingId: result.rows[i]?.id ?? row.mappingId,
+    }));
+    const savedDeclarationRows: DesignRow[] = declRows.map((row, i) => ({
+      ...row,
+      mappingId: result.rows[normalRows.length + i]?.id ?? row.mappingId,
     }));
     const savedSections: DesignSection[] = stage.sections.map((section, i) => {
       const sectionResult = result.sections[i];
@@ -181,6 +202,7 @@ export const useTemplateSave = ({
       ...stage,
       stageFsmId: result.format_stage_mapping_id,
       rows: savedRows,
+      declarationRows: savedDeclarationRows,
       sections: savedSections,
     };
   };

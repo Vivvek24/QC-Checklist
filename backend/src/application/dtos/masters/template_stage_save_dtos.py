@@ -50,6 +50,9 @@ class TemplateStageSaveDTO:
     stage_id: int
     rows: list[StageSaveRowDTO] = field(default_factory=list)
     columns: list[StageSaveColumnDTO] = field(default_factory=list)
+    # The stage's declaration-grid columns (rendered in ApprovalSnip). Saved
+    # with is_declaration=true, independent of the normal `columns`.
+    declaration_columns: list[StageSaveColumnDTO] = field(default_factory=list)
     sections: list[StageSaveSectionDTO] = field(default_factory=list)
     deleted_mapping_ids: list[int] = field(default_factory=list)
     deleted_section_ids: list[int] = field(default_factory=list)

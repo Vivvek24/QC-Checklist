@@ -33,6 +33,7 @@ from src.infrastructure.database.models.masters.format_stage_mapping_model impor
     FormatStageMappingModel,
 )
 from src.infrastructure.database.models.masters.question_model import QuestionModel
+from src.infrastructure.database.models.masters.product_model import ProductModel
 from src.infrastructure.database.models.masters.question_option_model import QuestionOptionModel
 from src.infrastructure.database.models.masters.remark_model import RemarkModel
 from src.infrastructure.database.models.masters.section_model import SectionModel
@@ -70,15 +71,6 @@ from src.infrastructure.database.models.user_model import UserModel
 _COMPANY_NAME = "Emcure"
 _COMPANY_LOCATION = "SANAND, AHEMDABAD"
 
-# Fallback columns when a stage/section has no Template Studio layout saved —
-# the generic Sr.No. / Question / Answer so the data is never lost.
-_FALLBACK_COLUMNS: list[PdfColumn] = [
-    PdfColumn(header="Sr.No.", column_type="SERIAL"),
-    PdfColumn(header="Question", column_type="QUESTION"),
-    PdfColumn(header="Answer", column_type="ANSWER"),
-]
-
-
 class PdfExportRepository(IPdfExportRepository):
     """Infrastructure layer — ORM queries + PdfDocument assembly for the PDF."""
 
@@ -95,9 +87,10 @@ class PdfExportRepository(IPdfExportRepository):
         sub_answers = await self._fetch_sub_answers(request_number)
         declarations = await self._fetch_declarations(request_number)
         signatures = await self._fetch_signatures(request_number)
+        test_rows = await self._fetch_test_rows(request_number)
 
         sections = self._build_sections(
-            question_rows, columns, sub_answers, declarations, signatures
+            question_rows, columns, sub_answers, declarations, signatures, test_rows
         )
 
         # Title: prefer the format's human title; fall back to its name. Shown
@@ -160,11 +153,20 @@ class PdfExportRepository(IPdfExportRepository):
         """
         selected_opt = aliased(QuestionOptionModel)
         response_opt = aliased(QuestionOptionModel)
+        product = aliased(ProductModel)
 
-        option_value = func.coalesce(selected_opt.option_title, "")
+        # OPTION: a Masters question resolves to the chosen product's name
+        # (product_id); otherwise the selected option title.
+        option_value = func.coalesce(
+            selected_opt.option_title,
+            product.product_name,
+            "",
+        )
+        # ANSWER: free text only. Helpers are NOT joined here (that would
+        # multiply rows — one per helper); a calculated question's value is its
+        # total (answer_total_vails), handled in assembly.
         answer_value = func.coalesce(
             func.nullif(QuestionAnswerModel.textbox_value, ""),
-            QuestionAnswerHelperModel.text_box_value,
             "",
         )
         response_value = func.coalesce(
@@ -182,8 +184,11 @@ class PdfExportRepository(IPdfExportRepository):
                 QuestionModel.id.label("question_id"),
                 StageQuestionMappingModel.serial_number.label("serial_number"),
                 QuestionModel.title.label("question"),
+                QuestionModel.answer_type.label("answer_type"),
                 option_value.label("option"),
                 answer_value.label("answer"),
+                QuestionAnswerModel.date_time.label("date_time"),
+                QuestionAnswerModel.answer_total_vails.label("answer_total_vails"),
                 response_value.label("response"),
                 func.coalesce(StageQuestionMappingModel.aql_limit, "").label("aql_limit"),
             )
@@ -210,11 +215,8 @@ class PdfExportRepository(IPdfExportRepository):
                 (QuestionAnswerModel.checklist_stage_id == ChecklistStageModel.id)
                 & (QuestionAnswerModel.stage_question_mapping_id == StageQuestionMappingModel.id),
             )
-            .outerjoin(
-                QuestionAnswerHelperModel,
-                QuestionAnswerHelperModel.question_answer_id == QuestionAnswerModel.id,
-            )
             .outerjoin(selected_opt, selected_opt.id == QuestionAnswerModel.question_option_id)
+            .outerjoin(product, product.id == QuestionAnswerModel.product_id)
             .outerjoin(
                 response_opt,
                 response_opt.id == QuestionAnswerModel.response_question_option_id,
@@ -229,6 +231,55 @@ class PdfExportRepository(IPdfExportRepository):
                 StageQuestionMappingModel.serial_number,
                 QuestionModel.id,
             )
+        )
+        return list((await self._session.execute(stmt)).all())
+
+    async def _fetch_test_rows(self, request_number: str) -> list[Row]:
+        """Auto-generated per-test rows on the recon Test stage (the Issue Vials
+        table). These have no stage_question_mapping/question — their test_title
+        is the row title, sample_vails the sample description, plus the
+        issued/received vial state. Ordered by serial_number."""
+        stmt = (
+            select(
+                FormatStageMappingModel.id.label("stage_order"),
+                StageModel.stage_name.label("stage_name"),
+                QuestionAnswerModel.serial_number.label("serial_number"),
+                QuestionAnswerModel.test_title.label("test_title"),
+                QuestionAnswerModel.sample_vails.label("sample_vails"),
+                QuestionAnswerModel.issuer_name.label("issuer_name"),
+                QuestionAnswerModel.issued_by_date.label("issued_by_date"),
+                QuestionAnswerModel.received_by_date.label("received_by_date"),
+                QuestionAnswerModel.receiver_user_id.label("receiver_user_id"),
+                func.coalesce(UserDetailsModel.employee_name, UserModel.username, "").label(
+                    "receiver_name"
+                ),
+            )
+            .select_from(ChecklistRequestModel)
+            .join(
+                ChecklistStageModel,
+                ChecklistStageModel.checklist_request_id == ChecklistRequestModel.id,
+            )
+            .join(
+                FormatStageMappingModel,
+                FormatStageMappingModel.id == ChecklistStageModel.format_stage_mapping_id,
+            )
+            .join(StageModel, StageModel.id == FormatStageMappingModel.stage_id)
+            .join(
+                QuestionAnswerModel,
+                (QuestionAnswerModel.checklist_stage_id == ChecklistStageModel.id)
+                & (QuestionAnswerModel.stage_question_mapping_id.is_(None))
+                & (QuestionAnswerModel.test_title != ""),
+            )
+            .outerjoin(UserModel, UserModel.id == QuestionAnswerModel.receiver_user_id)
+            .outerjoin(
+                UserDetailsModel,
+                UserDetailsModel.user_id == QuestionAnswerModel.receiver_user_id,
+            )
+            .where(
+                ChecklistRequestModel.request_number == request_number,
+                ChecklistRequestModel.is_removed.is_(False),
+            )
+            .order_by(FormatStageMappingModel.id, QuestionAnswerModel.serial_number)
         )
         return list((await self._session.execute(stmt)).all())
 
@@ -315,7 +366,8 @@ class PdfExportRepository(IPdfExportRepository):
             )
             .join(
                 TemplateLayoutColumnModel,
-                TemplateLayoutColumnModel.format_stage_mapping_id == FormatStageMappingModel.id,
+                (TemplateLayoutColumnModel.format_stage_mapping_id == FormatStageMappingModel.id)
+                & (TemplateLayoutColumnModel.is_declaration.is_(False)),
             )
             .where(
                 ChecklistRequestModel.request_number == request_number,
@@ -444,6 +496,7 @@ class PdfExportRepository(IPdfExportRepository):
         sub_answers: dict[int, list[Row]],
         declarations: list[Row],
         signatures: list[Row],
+        test_rows: list[Row] | None = None,
     ) -> list[PdfSection]:
         """Group rows + signatures by stage, then by section within a stage,
         attaching each group's template-configured columns.
@@ -474,13 +527,23 @@ class PdfExportRepository(IPdfExportRepository):
                 group_name[stage][sec_key] = r.section_name or ""
                 group_rows[stage][sec_key] = []
 
+            # ANSWER value: a Date & Time question shows its formatted date/time;
+            # otherwise the textbox/helper text. A calculated question with no
+            # textbox shows its accumulated total (answer_total_vails).
+            answer_type = (getattr(r, "answer_type", "") or "")
+            answer_display = r.answer or ""
+            if answer_type == "Date & Time" and getattr(r, "date_time", None) is not None:
+                answer_display = self._format_timestamp(r.date_time)
+            elif not answer_display and (getattr(r, "answer_total_vails", 0) or 0) > 0:
+                answer_display = str(r.answer_total_vails)
+
             group_rows[stage][sec_key].append(
                 PdfRow(
                     values={
                         "SERIAL": str(r.serial_number or 0),
                         "QUESTION": r.question or "",
                         "OPTION": r.option or "",
-                        "ANSWER": r.answer or "",
+                        "ANSWER": answer_display,
                         "RESPONSE": r.response or "",
                         # The response-option dropdown resolves to the same
                         # response-option value (via response_question_option_id).
@@ -491,6 +554,49 @@ class PdfExportRepository(IPdfExportRepository):
                         PdfSubAnswer(question=sa.sub_title or "", answer=sa.sub_value or "")
                         for sa in sub_answers.get(r.question_id or 0, [])
                     ],
+                )
+            )
+
+        # Recon Test stage: append the auto-generated Issue Vials rows (no
+        # mapping/question) to the stage's unheaded group so they render with
+        # the stage's TEST_TITLE / SAMPLE_VIAL / ISSUE_VAILS / RECEIVE_VIALS
+        # columns, in the same manner as the fill/approve page.
+        for t in test_rows or []:
+            stage = t.stage_order
+            if stage not in stage_titles:
+                stage_order.append(stage)
+                stage_titles[stage] = t.stage_name or ""
+                group_order[stage] = []
+                group_name[stage] = {}
+                group_rows[stage] = {}
+            if None not in group_name[stage]:
+                group_order[stage].append(None)
+                group_name[stage][None] = ""
+                group_rows[stage][None] = []
+
+            # Paragraph collapses "\n" to a space, so combine name + time on one
+            # line with a separator (name — dd-Mon-YYYY hh:mm AM/PM).
+            issue_display = ""
+            if (t.issuer_name or "").strip():
+                issue_display = t.issuer_name
+                if t.issued_by_date is not None:
+                    issue_display += f" — {self._format_timestamp(t.issued_by_date)}"
+            receive_display = ""
+            if t.receiver_user_id is not None:
+                receive_display = t.receiver_name or ""
+                if t.received_by_date is not None:
+                    receive_display += f" — {self._format_timestamp(t.received_by_date)}"
+
+            group_rows[stage][None].append(
+                PdfRow(
+                    values={
+                        "SERIAL": str(t.serial_number or 0),
+                        "TEST_TITLE": t.test_title or "",
+                        "SAMPLE_VIAL": t.sample_vails or "",
+                        "ISSUE_VAILS": issue_display,
+                        "RECEIVE_VIALS": receive_display,
+                    },
+                    sub_answers=[],
                 )
             )
 
@@ -557,11 +663,13 @@ class PdfExportRepository(IPdfExportRepository):
         section_id: int | None,
     ) -> list[PdfColumn]:
         """Columns for a (stage, section) scope: a section's own columns, else
-        the stage-level columns, else a generic layout so answers always show."""
+        the stage-level columns. Only the columns configured in Template Studio
+        are rendered (no generic fallback) — so the PDF matches the create
+        request page exactly."""
         cols = by_scope.get((stage_order, section_id))
         if not cols and section_id is not None:
             cols = by_scope.get((stage_order, None))
-        return cols or list(_FALLBACK_COLUMNS)
+        return cols or []
 
     @staticmethod
     def _format_timestamp(value: datetime | None) -> str:

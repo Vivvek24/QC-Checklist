@@ -81,6 +81,36 @@ async def list_users(
     )
 
 
+@router.get(
+    "/by-role",
+    response_model=UserListResponse,
+    summary="List active users assigned a given role (by role code)",
+    dependencies=[Depends(require_api_permission("users", "READ"))],
+)
+async def list_users_by_role(
+    role_code: str = Query(..., description="Role code, e.g. ANALYST"),
+    service: UserService = Depends(_get_user_service),
+) -> UserListResponse:
+    """GET /api/v1/users/by-role?role_code=ANALYST"""
+    result = await service.list_users_by_role_code(role_code)
+    return UserListResponse(
+        users=[
+            UserResponse(
+                id=u.id, username=u.username, is_active=u.is_active,
+                is_blocked=u.is_blocked, is_validate_ad=u.is_validate_ad,
+                employee_id=u.employee_id, employee_name=u.employee_name,
+                email=u.email, last_login=u.last_login,
+                created_by=u.created_by, created_date=u.created_date,
+                modified_by=u.modified_by, modified_date=u.modified_date,
+            )
+            for u in result.users
+        ],
+        total=result.total,
+        skip=result.skip,
+        limit=result.limit,
+    )
+
+
 @router.post(
     "",
     response_model=UserResponse,

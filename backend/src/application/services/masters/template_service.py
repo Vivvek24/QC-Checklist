@@ -72,13 +72,15 @@ class TemplateService:
                 display_order=index,
                 width=(c.width.strip() if c.width and c.width.strip() else None),
                 is_required=c.is_required,
+                is_declaration=dto.is_declaration,
                 created_by=actor.username,
                 modified_by=actor.username,
             )
             for index, c in enumerate(dto.columns)
         ]
         saved = await self._column_repo.replace_for_scope(
-            template.id, dto.format_stage_mapping_id, dto.section_id, columns
+            template.id, dto.format_stage_mapping_id, dto.section_id, columns,
+            is_declaration=dto.is_declaration,
         )
         return [self._column_to_dto(c) for c in saved]
 
@@ -118,6 +120,7 @@ class TemplateService:
             display_order=c.display_order,
             width=c.width,
             is_required=c.is_required,
+            is_declaration=c.is_declaration,
         )
 
 

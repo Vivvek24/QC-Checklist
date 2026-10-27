@@ -16,6 +16,9 @@ from src.infrastructure.database.models.masters.stage_model import StageModel
 from src.infrastructure.database.models.masters.stage_question_mapping_model import (
     StageQuestionMappingModel,
 )
+from src.infrastructure.database.models.masters.template_model import (
+    TemplateLayoutColumnModel,
+)
 from src.infrastructure.database.models.masters.validation_type_model import ValidationTypeModel
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import (
     ChecklistRequestModel,
@@ -206,9 +209,25 @@ class ValidateChecklistService:
             )
             question_answers = qa_result.scalars().all()
 
+            # The stage's configured column types (normal grid only) — mirrors
+            # what the create-request page renders. A question is only required
+            # if the stage has a column that renders its answer; otherwise the
+            # user has no field to fill, so it must not block submit.
+            column_types: set[str] = set()
+            if stage.format_stage_mapping_id:
+                col_result = await self._session.execute(
+                    select(TemplateLayoutColumnModel.column_type).where(
+                        TemplateLayoutColumnModel.format_stage_mapping_id
+                        == stage.format_stage_mapping_id,
+                        TemplateLayoutColumnModel.is_declaration.is_(False),
+                    )
+                )
+                column_types = {c.upper() for c in col_result.scalars().all()}
+
             # Validate each question answer
             await self._validate_question_answers(
                 question_answers=question_answers,
+                column_types=column_types,
                 result=result,
                 stage_id=stage.id,
                 stage_name=stage_name,
@@ -228,8 +247,17 @@ class ValidateChecklistService:
         format_type: str,
         checklist_request_id: int,
         fsm,
+        column_types: set[str] | None = None,
     ) -> None:
-        """Validates a list of question answers — mirrors SUB_VAL_QuestionAnswers."""
+        """Validates a list of question answers — mirrors SUB_VAL_QuestionAnswers.
+
+        `column_types` is the stage's configured column set; a required answer
+        is only enforced when a column that renders it exists (matches the UI).
+        An empty set means "unknown" — validate everything (backward compatible).
+        """
+        cols = column_types or set()
+        has_answer_col = (not cols) or ("ANSWER" in cols)
+        has_option_col = (not cols) or ("OPTION" in cols)
 
         for qa in question_answers:
             # Get question master
@@ -247,18 +275,46 @@ class ValidateChecklistService:
             if question is None:
                 continue
 
+            # Skip validation for custom-answer and non-editable mappings:
+            # those answers are system-calculated/auto-filled and read-only, so
+            # the user can't fill them — requiring them would wrongly block
+            # submit (mirrors the fill-page validation).
+            if qa.stage_question_mapping_id:
+                sqm_result = await self._session.execute(
+                    select(StageQuestionMappingModel).where(
+                        StageQuestionMappingModel.id == qa.stage_question_mapping_id
+                    )
+                )
+                sqm_row = sqm_result.scalar_one_or_none()
+                if sqm_row and (sqm_row.custom_answers or sqm_row.is_editable is False):
+                    continue
+
             question_title = question.title or f"Question #{qa.question_id}"
             answer_type = question.answer_type or ""
 
             # Phase 2: Answer type validations
-            # 2a: Text Box — check if empty
-            if answer_type == "Text Box" or (answer_type != "None" and question.has_text_box):
+            # 2a: Text Box — check if empty (only when the stage renders an
+            # answer column for it).
+            #
+            # ReconcilationSheet: a calculated (is_calculated) question is NOT
+            # required at submit — its value is accumulated later via the
+            # "+ Add" helpers (the analyst fills it). Skip the required check so
+            # the submit isn't blocked (mirrors the fill-page validation).
+            skip_calculated = (
+                format_type == "ReconcilationSheet" and bool(question.is_calculated)
+            )
+            if (not skip_calculated) and has_answer_col and (
+                answer_type == "Text Box" or (answer_type != "None" and question.has_text_box)
+            ):
                 if not qa.textbox_value or not qa.textbox_value.strip():
                     result.add_error(stage_id, stage_name, qa.question_id, question_title,
                                      "Please enter the value")
 
             # 2b: Dropdown (single/multi select) — check if option selected
-            if answer_type in ("Dropdown (single select)", "Dropdown (multi select)"):
+            # (only when the stage renders a select-option column).
+            if has_option_col and answer_type in (
+                "Dropdown (single select)", "Dropdown (multi select)"
+            ):
                 if not qa.question_option_id:
                     # Check if any options linked via junction
                     msg = "Choose one option above!" if "single" in answer_type else "Choose one/multiple option(s) above!"

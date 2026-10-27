@@ -14,14 +14,16 @@ class ITemplateLayoutColumnRepository(ABC):
 
     @abstractmethod
     async def list_for_scope(
-        self, format_stage_mapping_id: int, section_id: int | None
+        self, format_stage_mapping_id: int, section_id: int | None,
+        is_declaration: bool = False,
     ) -> list[TemplateLayoutColumn]:
-        """Columns for a stage (section_id None) or a section, ordered by display_order."""
+        """Columns for a scope (stage/section × normal/declaration), ordered by display_order."""
         ...
 
     @abstractmethod
     async def list_for_stage(self, format_stage_mapping_id: int) -> list[TemplateLayoutColumn]:
-        """All columns (stage-level and every section) under one stage mapping."""
+        """All columns (stage-level and every section, both normal and
+        declaration) under one stage mapping."""
         ...
 
     @abstractmethod
@@ -31,13 +33,15 @@ class ITemplateLayoutColumnRepository(ABC):
         format_stage_mapping_id: int,
         section_id: int | None,
         columns: list[TemplateLayoutColumn],
+        is_declaration: bool = False,
     ) -> list[TemplateLayoutColumn]:
         """Replace all columns for a scope with the given set, in order."""
         ...
 
     @abstractmethod
     async def delete_for_scope(
-        self, format_stage_mapping_id: int, section_id: int | None
+        self, format_stage_mapping_id: int, section_id: int | None,
+        is_declaration: bool = False,
     ) -> None:
-        """Remove all columns for a stage/section scope, if any."""
+        """Remove all columns for a stage/section/declaration scope, if any."""
         ...

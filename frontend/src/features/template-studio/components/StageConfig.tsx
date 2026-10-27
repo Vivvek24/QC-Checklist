@@ -89,6 +89,14 @@ export const StageConfig = ({
 
   const setColumns = (columns: DesignColumn[]) => onChange({ ...stage, columns });
   const setRows = (rows: DesignRow[]) => onChange({ ...stage, rows });
+  const setDeclarationColumns = (declarationColumns: DesignColumn[]) =>
+    onChange({ ...stage, declarationColumns });
+  const setDeclarationRows = (declarationRows: DesignRow[]) =>
+    onChange({ ...stage, declarationRows });
+
+  // The declaration grid has its OWN rows (declaration questions) and columns,
+  // configured directly here — no dependency on the normal grid.
+  const showDeclarationGrid = !isBasicDetails && ctx.hasDeclarationQuestion;
 
   const setSections = (sections: DesignSection[]) => onChange({ ...stage, sections });
   const addSection = () => setSections([...stage.sections, emptySection()]);
@@ -185,6 +193,27 @@ export const StageConfig = ({
             tooltip="Add Section"
             tooltipOptions={{ position: 'top' }}
           />
+        )}
+
+        {/* Declaration grid — its own rows (declaration questions) AND column
+            layout, configured directly here (rendered in ApprovalSnip at fill
+            time). Independent of the normal grid above. */}
+        {showDeclarationGrid && stage.stageId != null && (
+          <div className="mt-3 pt-3 snip-stage-sections-wrap">
+            <div className="text-xs text-600 font-medium mb-2">
+              Declaration Grid <span className="text-500">(declaration questions &amp; their columns)</span>
+            </div>
+            <ConfigTable
+              columns={stage.declarationColumns}
+              rows={stage.declarationRows}
+              questionChoices={questionChoices}
+              stageName={stage.stageName}
+              ctx={ctx}
+              onColumnsChange={setDeclarationColumns}
+              onRowsChange={setDeclarationRows}
+              onRowDeleted={onRowDeleted}
+            />
+          </div>
         )}
 
         {/* Approval labels — auto-populated from the stage's existing mapping (read-only) */}

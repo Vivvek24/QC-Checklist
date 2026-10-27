@@ -249,7 +249,10 @@ export const ConfigTable = ({ columns, rows, questionChoices, stageName, ctx, on
   const showShowOnGrid = isBasicDetails;
   const showSapField = isBasicDetails && isAQL;
   const showIsEditable = isBasicDetails && (isAQL || isReconcilation);
-  const showDeclaration = ctx.hasDeclarationQuestion && !isBasicDetails;
+  // Declaration membership is now defined by which grid a row lives in (the
+  // dedicated Declaration Grid), not a per-row toggle — so this row-setting is
+  // retired.
+  const showDeclaration = false;
   const showCustomAnswers = isReconcilation;
   const showAqlLimit = isAQL;
 
@@ -357,6 +360,20 @@ export const ConfigTable = ({ columns, rows, questionChoices, stageName, ctx, on
 
       case 'OPTION': {
         if (!q) return needQuestion;
+        // A "Masters" question (e.g. Product Master) shows a master dropdown at
+        // fill time; in config we show a disabled placeholder dropdown only.
+        if (q.answerType === 'Masters') {
+          return (
+            <Dropdown
+              value={null}
+              options={[]}
+              placeholder={q.masterType ? `Select ${q.masterType}` : 'Select'}
+              disabled
+              className="w-full"
+              style={{ height: '1.85rem', fontSize: '0.75rem' }}
+            />
+          );
+        }
         const hasOwnOptions = q.options.length > 0;
         const subsWithOptions = q.hasSubQuestion
           ? q.subQuestions.filter((s) => s.options && s.options.length > 0)
@@ -408,6 +425,55 @@ export const ConfigTable = ({ columns, rows, questionChoices, stageName, ctx, on
               <span key={o.id} style={{ fontSize: '0.72rem', color: '#475569' }}>• {o.label}</span>
             ))}
           </div>
+        );
+      }
+
+      case 'TEST_TITLE': {
+        // Test rows are auto-generated at fill time (one per test of the
+        // selected product); in config we just show a read-only placeholder.
+        return (
+          <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+            test title (auto-generated)
+          </span>
+        );
+      }
+
+      case 'SAMPLE_VIAL': {
+        // Sample vial is entered per row at fill time; in config we show a
+        // disabled placeholder input only.
+        return (
+          <InputText
+            placeholder="Sample vial"
+            className="w-full"
+            style={{ height: '1.85rem', fontSize: '0.75rem' }}
+            disabled
+          />
+        );
+      }
+
+      case 'ISSUE_VAILS': {
+        // At fill time this renders an "Issue Vials" action button; in config
+        // we show a disabled preview of it.
+        return (
+          <Button
+            label="Issue Vials"
+            icon="pi pi-send"
+            size="small"
+            outlined
+            disabled
+            type="button"
+            style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
+          />
+        );
+      }
+
+      case 'RECEIVE_VIALS': {
+        // Receive-vials column — fill-time rendering to be defined later; config
+        // shows a neutral placeholder for now.
+        return (
+          <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.72rem' }}>
+            receive vials
+          </span>
         );
       }
 

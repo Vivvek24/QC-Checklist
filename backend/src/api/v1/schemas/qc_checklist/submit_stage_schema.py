@@ -45,6 +45,8 @@ class AnswerSchema(BaseModel):
     product_id: int | None = None
     date_time: str | None = None
     helpers: list[str] | None = None
+    has_helper: bool = False
+    answer_total_vails: int = 0
     sub_answers: list[SubAnswerSchema] | None = None
 
     def to_payload(self) -> QuestionAnswerPayload:
@@ -58,6 +60,8 @@ class AnswerSchema(BaseModel):
             product_id=self.product_id,
             date_time=self.date_time,
             helpers=self.helpers,
+            has_helper=self.has_helper,
+            answer_total_vails=self.answer_total_vails,
             sub_answers=[s.to_payload() for s in self.sub_answers] if self.sub_answers else None,
         )
 

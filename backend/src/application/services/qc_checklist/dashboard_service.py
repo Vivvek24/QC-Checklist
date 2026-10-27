@@ -33,12 +33,31 @@ class DashboardService:
     def __init__(self, repo: DashboardRepository) -> None:
         self._repo = repo
 
+    async def get_dashboard_for_user(
+        self,
+        user_id: int,
+        from_date: date | None,
+        to_date: date | None,
+    ) -> dict:
+        """Resolve the acting user's role context (role_id + admin flag) and
+        build the dashboard data for them. The controller passes only the
+        authenticated user; all role lookups happen in the repository."""
+        role_id, is_admin = await self._repo.get_user_role_context(user_id)
+        return await self.get_dashboard(
+            from_date=from_date,
+            to_date=to_date,
+            role_id=role_id,
+            is_admin=is_admin,
+            user_id=user_id,
+        )
+
     async def get_dashboard(
         self,
         from_date: date | None,
         to_date: date | None,
         role_id: int | None,
         is_admin: bool,
+        user_id: int | None = None,
     ) -> dict:
         """Returns { pending: [...], approved: [...], total: int }."""
         pending_rows = await self._repo.fetch_dashboard_rows(
@@ -55,10 +74,15 @@ class DashboardService:
         pending = [self._to_dashboard_row(r) for r in pending_rows]
         approved = [self._to_dashboard_row(r) for r in approved_rows]
 
-        # Compute action_flag for pending requests
+        # Compute action_flag for pending requests. Prime the repo's batch cache
+        # once (a few queries for ALL pending requests) so the per-request
+        # visibility logic reads from memory instead of issuing N+1 queries.
         if role_id:
+            await self._repo.prime_button_visibility([dr.request_number for dr in pending])
             for dr in pending:
-                dr.action_flag = await self._control_button_visibility(dr.request_number, role_id)
+                dr.action_flag = await self._control_button_visibility(
+                    dr.request_number, role_id, user_id
+                )
 
         total = await self._repo.count_requests_in_range(
             from_date=from_date, to_date=to_date,
@@ -83,7 +107,9 @@ class DashboardService:
             action_flag=False,
         )
 
-    async def _control_button_visibility(self, request_number: str, user_role_id: int) -> bool:
+    async def _control_button_visibility(
+        self, request_number: str, user_role_id: int, user_id: int | None = None
+    ) -> bool:
         """
         Port of Mendix controlButtonVisibility.
         Determines if the current user (by role) can act on this request.
@@ -115,7 +141,6 @@ class DashboardService:
         count = len(mappings)
 
         for current_count, mapping in enumerate(mappings, 1):
-            mapping_id = mapping[0]
             approval_label_id = mapping[1]
             mapping_user_id = mapping[2]
             date_of_action = mapping[3]
@@ -145,14 +170,42 @@ class DashboardService:
             if not same_role:
                 continue
 
-            sibling_acted = await self._repo.get_sibling_mapping_acted(stage_id, mapping_id)
-
-            # ReconcilationSheet special logic
+            # ReconcilationSheet special logic — driven by whether all vials are
+            # issued, NOT by the analyst mapping being acted (the analyst's first
+            # submit no longer records an approval action).
+            #
+            #   - Vials still unissued  → the SUPERVISOR (the last/APPROVE label's
+            #     role) gets the "Fill Next Stage" button so they can issue vials.
+            #     The analyst must NOT see it during this phase.
+            #   - All vials issued      → the ANALYST (the first/SUBMIT label's
+            #     role) gets the button to calculate destroyed samples + submit.
             if format_type == "ReconcilationSheet":
-                if date_of_action is None and booltype != "APPROVE":
+                has_unissued = await self._repo.has_not_issued_vails(stage_id)
+                if has_unissued:
+                    # Supervisor phase: only the APPROVE-label role (supervisor),
+                    # and only while the stage is still open (not yet Pending).
+                    if booltype == "APPROVE" and stage_status != "Pending":
+                        return True
+                    continue
+                # Analyst phase (all vials issued): the SUBMIT-label role acts
+                # until it's submitted for approval; the APPROVE-label role acts
+                # once it's Pending.
+                if booltype != "APPROVE" and date_of_action is None and stage_status != "Pending":
                     return True
-                if date_of_action is None and sibling_acted:
+                if booltype == "APPROVE" and stage_status == "Pending":
                     return True
+                continue
+
+            # A referred-back stage goes back ONLY to the analyst who originally
+            # filled it (the stage's user_id) — not every analyst sharing that
+            # role. Skip the button for anyone else. (When user_id is unknown,
+            # fall back to role-only, preserving prior behavior.)
+            if (
+                stage_status == "ReferBack"
+                and user_id is not None
+                and stage_user_id is not None
+                and stage_user_id != user_id
+            ):
                 continue
 
             # Standard logic

@@ -38,6 +38,7 @@ class QuestionAnswerPreview(BaseModel):
     section_name: str | None = None
     show_on_grid: bool = False
     answer_type: str = ""
+    master_type: str | None = None
     has_text_box: bool = False
     has_multiple_text_box: bool = False
     has_sub_question: bool = False
@@ -48,6 +49,8 @@ class QuestionAnswerPreview(BaseModel):
     is_editable: bool = True
     custom_answers: str | None = None
     is_approvable: bool = False
+    has_associated_master: bool = False
+    is_calculated: bool = False
     sub_questions: list[QuestionAnswerPreview] = []
     options: list[QuestionOptionSchema] = []
     response_options: list[QuestionOptionSchema] = []
@@ -64,6 +67,7 @@ class QuestionAnswerPreview(BaseModel):
             section_name=dto.section_name,
             show_on_grid=dto.show_on_grid,
             answer_type=dto.answer_type,
+            master_type=dto.master_type,
             has_text_box=dto.has_text_box,
             has_multiple_text_box=dto.has_multiple_text_box,
             has_sub_question=dto.has_sub_question,
@@ -74,6 +78,8 @@ class QuestionAnswerPreview(BaseModel):
             is_editable=dto.is_editable,
             custom_answers=dto.custom_answers,
             is_approvable=dto.is_approvable,
+            has_associated_master=dto.has_associated_master,
+            is_calculated=dto.is_calculated,
             sub_questions=[cls.from_dto(sq) for sq in dto.sub_questions],
             options=[QuestionOptionSchema.from_dto(o) for o in dto.options],
             response_options=[QuestionOptionSchema.from_dto(o) for o in dto.response_options],
@@ -138,6 +144,7 @@ class ChecklistStagePreview(BaseModel):
     sections: list[SectionPreview]
     approval_labels: list[ApprovalLabelPreview]
     columns: list[ColumnPreview] = []
+    declaration_columns: list[ColumnPreview] = []
 
     @classmethod
     def from_dto(cls, dto: ChecklistStagePreviewDTO) -> ChecklistStagePreview:
@@ -152,6 +159,7 @@ class ChecklistStagePreview(BaseModel):
             sections=[SectionPreview.from_dto(s) for s in dto.sections],
             approval_labels=[ApprovalLabelPreview.from_dto(a) for a in dto.approval_labels],
             columns=[ColumnPreview.from_dto(c) for c in dto.columns],
+            declaration_columns=[ColumnPreview.from_dto(c) for c in dto.declaration_columns],
         )
 
 

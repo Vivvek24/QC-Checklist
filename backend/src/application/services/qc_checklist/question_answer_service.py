@@ -1,15 +1,22 @@
 """QuestionAnswer — application service."""
 
+from dataclasses import asdict
+
 from src.application.dtos.qc_checklist.question_answer_dtos import (
     CreateQuestionAnswerDTO,
+    ParentSubAnswersDTO,
     QuestionAnswerDTO,
     QuestionAnswerListDTO,
+    StageAnswerDTO,
+    SubAnswerItemDTO,
     UpdateQuestionAnswerDTO,
 )
 from src.domain.entities.qc_checklist.question_answer import QuestionAnswer
 from src.domain.entities.user import User
 from src.domain.exceptions.domain_exceptions import EntityNotFoundError
-from src.domain.repositories.qc_checklist.question_answer_repository import IQuestionAnswerRepository
+from src.domain.repositories.qc_checklist.question_answer_repository import (
+    IQuestionAnswerRepository,
+)
 
 ENTITY = "QuestionAnswer"
 
@@ -21,13 +28,56 @@ class QuestionAnswerService:
     async def list_answers(self, skip: int = 0, limit: int = 100) -> QuestionAnswerListDTO:
         items = await self._repo.list_all(skip=skip, limit=limit)
         total = await self._repo.count()
-        return QuestionAnswerListDTO(items=[self._to_dto(i) for i in items], total=total, skip=skip, limit=limit)
+        return QuestionAnswerListDTO(
+            items=[self._to_dto(i) for i in items], total=total, skip=skip, limit=limit
+        )
 
     async def list_by_checklist_stage(self, checklist_stage_id: int) -> list[QuestionAnswerDTO]:
         items = await self._repo.list_by_checklist_stage(checklist_stage_id)
         return [self._to_dto(i) for i in items]
 
-    async def list_by_stage_question_mapping(self, stage_question_mapping_id: int) -> list[QuestionAnswerDTO]:
+    async def list_stage_answers(self, checklist_stage_id: int) -> list[StageAnswerDTO]:
+        """Stage answers enriched for the fill page: each answer plus its
+        resolved receiver name (receiver_user_id → analyst full name) and its
+        calculated-question helper values."""
+        items = await self._repo.list_by_checklist_stage(checklist_stage_id)
+        names = await self._repo.resolve_user_names(
+            {i.receiver_user_id for i in items if i.receiver_user_id}
+        )
+        helpers = await self._repo.list_helpers_by_answer_ids([i.id for i in items])
+        return [
+            StageAnswerDTO(
+                **asdict(self._to_dto(i)),
+                receiver_name=names.get(i.receiver_user_id or 0, ""),
+                helpers=tuple(helpers.get(i.id, [])),
+            )
+            for i in items
+        ]
+
+    async def list_sub_answers(self, checklist_stage_id: int) -> list[ParentSubAnswersDTO]:
+        """Saved sub-question answers for a stage, grouped by parent question_id
+        so the fill page can repopulate each sub-question's input."""
+        grouped = await self._repo.list_sub_answers_grouped(checklist_stage_id)
+        return [
+            ParentSubAnswersDTO(
+                parent_question_id=parent_qid,
+                sub_answers=tuple(
+                    SubAnswerItemDTO(
+                        question_id=qid,
+                        question_option_id=opt_id,
+                        response_question_option_id=resp_opt_id,
+                        textbox_value=textbox,
+                        response_answer=resp_answer,
+                    )
+                    for qid, opt_id, resp_opt_id, textbox, resp_answer in children
+                ),
+            )
+            for parent_qid, children in grouped.items()
+        ]
+
+    async def list_by_stage_question_mapping(
+        self, stage_question_mapping_id: int
+    ) -> list[QuestionAnswerDTO]:
         items = await self._repo.list_by_stage_question_mapping(stage_question_mapping_id)
         return [self._to_dto(i) for i in items]
 
@@ -64,7 +114,9 @@ class QuestionAnswerService:
         ))
         return self._to_dto(created)
 
-    async def update_answer(self, answer_id: int, dto: UpdateQuestionAnswerDTO, actor: User) -> QuestionAnswerDTO:
+    async def update_answer(
+        self, answer_id: int, dto: UpdateQuestionAnswerDTO, actor: User
+    ) -> QuestionAnswerDTO:
         entity = await self._require(answer_id)
         if dto.checklist_stage_section_id is not None:
             entity.checklist_stage_section_id = dto.checklist_stage_section_id

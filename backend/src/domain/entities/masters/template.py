@@ -34,6 +34,8 @@ class TemplateLayoutColumn(BaseEntity):
     format_stage_mapping_id: int = field(default=0)
     # None => stage-level column; a value => section-level column.
     section_id: int | None = field(default=None)
+    # True => belongs to the stage's declaration grid (not the normal grid).
+    is_declaration: bool = field(default=False)
     header: str = field(default="")
     column_type: ColumnType = field(default=ColumnType.ANSWER)
     display_order: int = field(default=0)

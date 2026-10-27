@@ -23,9 +23,10 @@ class TemplateLayoutColumnRepositoryImpl(ITemplateLayoutColumnRepository):
         self._session = session
 
     async def list_for_scope(
-        self, format_stage_mapping_id: int, section_id: int | None
+        self, format_stage_mapping_id: int, section_id: int | None,
+        is_declaration: bool = False,
     ) -> list[TemplateLayoutColumn]:
-        stmt = self._scope_stmt(format_stage_mapping_id, section_id).order_by(
+        stmt = self._scope_stmt(format_stage_mapping_id, section_id, is_declaration).order_by(
             TemplateLayoutColumnModel.display_order
         )
         result = await self._session.execute(stmt)
@@ -46,9 +47,10 @@ class TemplateLayoutColumnRepositoryImpl(ITemplateLayoutColumnRepository):
         format_stage_mapping_id: int,
         section_id: int | None,
         columns: list[TemplateLayoutColumn],
+        is_declaration: bool = False,
     ) -> list[TemplateLayoutColumn]:
         await self._session.execute(
-            self._scope_delete_stmt(format_stage_mapping_id, section_id)
+            self._scope_delete_stmt(format_stage_mapping_id, section_id, is_declaration)
         )
 
         models = [
@@ -56,6 +58,7 @@ class TemplateLayoutColumnRepositoryImpl(ITemplateLayoutColumnRepository):
                 template_id=template_id,
                 format_stage_mapping_id=format_stage_mapping_id,
                 section_id=section_id,
+                is_declaration=is_declaration,
                 header=col.header,
                 column_type=col.column_type.value,
                 display_order=col.display_order,
@@ -71,19 +74,21 @@ class TemplateLayoutColumnRepositoryImpl(ITemplateLayoutColumnRepository):
         return [self._to_entity(m) for m in models]
 
     async def delete_for_scope(
-        self, format_stage_mapping_id: int, section_id: int | None
+        self, format_stage_mapping_id: int, section_id: int | None,
+        is_declaration: bool = False,
     ) -> None:
         await self._session.execute(
-            self._scope_delete_stmt(format_stage_mapping_id, section_id)
+            self._scope_delete_stmt(format_stage_mapping_id, section_id, is_declaration)
         )
         await self._session.flush()
 
     @staticmethod
     def _scope_stmt(
-        format_stage_mapping_id: int, section_id: int | None
+        format_stage_mapping_id: int, section_id: int | None, is_declaration: bool = False
     ) -> Select[tuple[TemplateLayoutColumnModel]]:
         stmt = select(TemplateLayoutColumnModel).where(
-            TemplateLayoutColumnModel.format_stage_mapping_id == format_stage_mapping_id
+            TemplateLayoutColumnModel.format_stage_mapping_id == format_stage_mapping_id,
+            TemplateLayoutColumnModel.is_declaration == is_declaration,
         )
         return (
             stmt.where(TemplateLayoutColumnModel.section_id.is_(None))
@@ -93,10 +98,11 @@ class TemplateLayoutColumnRepositoryImpl(ITemplateLayoutColumnRepository):
 
     @staticmethod
     def _scope_delete_stmt(
-        format_stage_mapping_id: int, section_id: int | None
+        format_stage_mapping_id: int, section_id: int | None, is_declaration: bool = False
     ) -> Delete:
         stmt = delete(TemplateLayoutColumnModel).where(
-            TemplateLayoutColumnModel.format_stage_mapping_id == format_stage_mapping_id
+            TemplateLayoutColumnModel.format_stage_mapping_id == format_stage_mapping_id,
+            TemplateLayoutColumnModel.is_declaration == is_declaration,
         )
         return (
             stmt.where(TemplateLayoutColumnModel.section_id.is_(None))
@@ -111,6 +117,7 @@ class TemplateLayoutColumnRepositoryImpl(ITemplateLayoutColumnRepository):
             template_id=model.template_id,
             format_stage_mapping_id=model.format_stage_mapping_id,
             section_id=model.section_id,
+            is_declaration=model.is_declaration,
             header=model.header,
             column_type=ColumnType(model.column_type),
             display_order=model.display_order,

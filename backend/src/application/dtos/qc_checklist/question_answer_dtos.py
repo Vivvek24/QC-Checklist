@@ -95,3 +95,30 @@ class QuestionAnswerListDTO:
     total: int
     skip: int
     limit: int
+
+
+@dataclass(frozen=True)
+class StageAnswerDTO(QuestionAnswerDTO):
+    """A stage answer enriched with the resolved receiver name and the
+    calculated-question "+ Add" helper values — the shape the fill page needs
+    when loading a stage. `receiver_name` resolves receiver_user_id to the
+    analyst's full name; `helpers` are the ordered helper text values."""
+    receiver_name: str = ""
+    helpers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SubAnswerItemDTO:
+    """One sub-question's saved answer under a parent question."""
+    question_id: int
+    question_option_id: int | None
+    response_question_option_id: int | None
+    textbox_value: str
+    response_answer: str
+
+
+@dataclass(frozen=True)
+class ParentSubAnswersDTO:
+    """A parent question's saved sub-answers, grouped for the fill page."""
+    parent_question_id: int
+    sub_answers: tuple[SubAnswerItemDTO, ...]

@@ -129,7 +129,7 @@ export const DashboardPage = () => {
   ) => (
     <DataTable value={rows} size="small" stripedRows paginator rows={15} removableSort
       emptyMessage={emptyMsg} style={{ fontSize: '0.78rem' }}
-      scrollable scrollHeight="calc(100vh - 420px)">
+      scrollable scrollHeight="flex">
       <Column field="request_number" header="Request No" body={requestNoBody}
         style={{ minWidth: '9.5rem' }} className="qc-frozen-col" sortable frozen />
       {actionsMode === 'pending' && (

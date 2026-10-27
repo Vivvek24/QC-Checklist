@@ -34,6 +34,7 @@ from src.application.services.qc_checklist.validate_checklist_service import (
     ValidationResult,
 )
 from src.domain.entities.qc_checklist.question_answer import QuestionAnswer
+from src.domain.enums.custom_answer_enum import CustomAnswer
 from src.domain.entities.qc_checklist.stage_approval_label_mapping import (
     StageApprovalLabelMapping,
 )
@@ -46,6 +47,9 @@ from src.infrastructure.database.repositories.qc_checklist.question_answer_repos
 from src.infrastructure.database.repositories.qc_checklist.stage_approval_label_mapping_repository_impl import (  # noqa: E501
     StageApprovalLabelMappingRepositoryImpl,
 )
+from src.infrastructure.database.repositories.masters.test_master_repository_impl import (
+    TestMasterRepositoryImpl,
+)
 from src.domain.exceptions.domain_exceptions import BusinessRuleViolationError, EntityNotFoundError
 from src.infrastructure.database.models.masters.approval_label_model import (
     ApprovalLabelModel,
@@ -55,6 +59,9 @@ from src.infrastructure.database.models.masters.format_stage_mapping_model impor
     FormatStageMappingModel,
 )
 from src.infrastructure.database.models.masters.stage_model import StageModel
+from src.infrastructure.database.models.masters.stage_question_mapping_model import (
+    StageQuestionMappingModel,
+)
 from src.infrastructure.database.models.qc_checklist.checklist_request_model import (
     ChecklistRequestModel,
 )
@@ -95,6 +102,7 @@ class StageActionBase:
         self._qa_repo = QuestionAnswerRepositoryImpl(session)
         self._salm_repo = StageApprovalLabelMappingRepositoryImpl(session)
         self._helper_repo = QuestionAnswerHelperRepositoryImpl(session)
+        self._test_master_repo = TestMasterRepositoryImpl(session)
 
     async def execute(
         self, request: SubmitStageRequest, user_id: int, role_id: int | None,
@@ -434,6 +442,18 @@ class StageActionBase:
 
     # ── answer persistence ──────────────────────────────────────────────────────
 
+    @staticmethod
+    def _parse_date_time(value: str | None) -> datetime | None:
+        """Parse an ISO-8601 date-time string (as sent by the fill page's date
+        picker) into a datetime. Returns None for empty/invalid input so a blank
+        value never overwrites an existing/stamped date."""
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+
     async def _persist_answers(
         self, stage_id: int, answers: list[QuestionAnswerPayload], user_id: int, now: datetime,
     ) -> None:
@@ -446,12 +466,22 @@ class StageActionBase:
                 )
             )
             existing = existing_result.scalar_one_or_none()
+            # Date & Time answers arrive as an ISO string on the payload — parse
+            # to a datetime so the picker value is actually persisted (and shows
+            # when the request is reopened on the fill page).
+            answer_dt = self._parse_date_time(ans.date_time)
             if existing:
                 existing.textbox_value = ans.textbox_value
                 existing.question_option_id = ans.question_option_id
                 existing.response_question_option_id = ans.response_question_option_id
                 existing.response_answer = ans.response_answer
                 existing.product_id = ans.product_id
+                existing.has_helper = ans.has_helper or bool(ans.helpers)
+                existing.answer_total_vails = ans.answer_total_vails
+                # Only overwrite when a value was sent — don't wipe a
+                # system-stamped date (e.g. StartDate) on a blank resubmit.
+                if answer_dt is not None:
+                    existing.date_time = answer_dt
                 existing.modified_by = str(user_id)
                 existing.modified_date = now
                 qa_id = existing.id
@@ -467,7 +497,9 @@ class StageActionBase:
                     response_question_option_id=ans.response_question_option_id,
                     response_answer=ans.response_answer,
                     product_id=ans.product_id,
-                    has_helper=bool(ans.helpers),
+                    date_time=answer_dt,
+                    has_helper=ans.has_helper or bool(ans.helpers),
+                    answer_total_vails=ans.answer_total_vails,
                     created_by=str(user_id),
                     modified_by=str(user_id),
                 ))
@@ -511,6 +543,232 @@ class StageActionBase:
                 modified_by=str(user_id),
             ))
             await self._qa_repo.link_sub_answer(parent_qa_id, child.id, str(user_id))
+
+    # ── product → test expansion ─────────────────────────────────────────────────
+
+    async def _next_stage_after(
+        self, cr: ChecklistRequestModel, basic_stage: ChecklistStageModel
+    ) -> ChecklistStageModel | None:
+        """The stage immediately after the Basic Details stage (ordered by id).
+        Tests expanded from a product are created on this stage."""
+        result = await self._session.execute(
+            select(ChecklistStageModel)
+            .where(ChecklistStageModel.checklist_request_id == cr.id)
+            .order_by(ChecklistStageModel.id)
+        )
+        stages = list(result.scalars().all())
+        idx = next((i for i, s in enumerate(stages) if s.id == basic_stage.id), None)
+        if idx is None or idx >= len(stages) - 1:
+            return None
+        return stages[idx + 1]
+
+    async def _expand_product_tests(
+        self, cr: ChecklistRequestModel, basic_stage: ChecklistStageModel,
+        user_id: int, now: datetime,
+    ) -> None:
+        """When a product is chosen on the Basic Details' Masters question,
+        create one question_answer per test of that product on the NEXT stage,
+        storing each test's name in test_title. Re-runs idempotently: the
+        auto-generated test rows (stage_question_mapping_id NULL, non-empty
+        test_title) on the next stage are cleared and recreated each submit."""
+        # Product id(s) selected on this Basic Details stage.
+        prod_result = await self._session.execute(
+            select(QuestionAnswerModel.product_id).where(
+                QuestionAnswerModel.checklist_stage_id == basic_stage.id,
+                QuestionAnswerModel.product_id.is_not(None),
+            )
+        )
+        product_ids = [pid for pid in prod_result.scalars().all() if pid]
+        if not product_ids:
+            return
+
+        next_stage = await self._next_stage_after(cr, basic_stage)
+        if next_stage is None:
+            return
+
+        # Clear previously auto-generated test rows on the next stage so a
+        # changed product re-expands cleanly.
+        old = await self._session.execute(
+            select(QuestionAnswerModel).where(
+                QuestionAnswerModel.checklist_stage_id == next_stage.id,
+                QuestionAnswerModel.stage_question_mapping_id.is_(None),
+                QuestionAnswerModel.test_title != "",
+            )
+        )
+        for row in old.scalars().all():
+            await self._session.delete(row)
+        await self._session.flush()
+
+        serial = 0
+        total_sample_qty = 0
+        for product_id in product_ids:
+            tests = await self._test_master_repo.list_by_product(product_id)
+            for test in tests:
+                serial += 1
+                total_sample_qty += test.sample_qty or 0
+                # sample_vails holds the vial description text; has_vails is
+                # whether any sample is issued for this test:
+                #   sample_vails = test_masters.sample_description
+                #   has_vails    = test_masters.sample_qty != 0
+                await self._qa_repo.create(QuestionAnswer(
+                    checklist_stage_id=next_stage.id,
+                    stage_question_mapping_id=None,
+                    product_id=product_id,
+                    test_title=test.test_name,
+                    sample_vails=test.sample_description,
+                    has_vails=test.sample_qty != 0,
+                    serial_number=serial,
+                    created_by=str(user_id),
+                    modified_by=str(user_id),
+                ))
+
+        # Populate the "Calculate_SampleConsumed" question on the next stage
+        # with the total sample quantity across the product's tests.
+        await self._populate_sample_consumed(next_stage, total_sample_qty, user_id, now)
+
+    async def _populate_sample_consumed(
+        self, stage: ChecklistStageModel, total_sample_qty: int,
+        user_id: int, now: datetime,
+    ) -> None:
+        """Upsert the question_answer for the stage's question whose mapping has
+        custom_answers = 'Calculate_SampleConsumed', setting its textbox_value to
+        the total sample quantity (sum of the product's test sample_qty)."""
+        if not stage.format_stage_mapping_id:
+            return
+        mapping_result = await self._session.execute(
+            select(StageQuestionMappingModel).where(
+                StageQuestionMappingModel.format_stage_mapping_id
+                == stage.format_stage_mapping_id,
+                StageQuestionMappingModel.custom_answers
+                == CustomAnswer.CALCULATE_SAMPLE_CONSUMED.value,
+            )
+        )
+        mapping = mapping_result.scalars().first()
+        if mapping is None:
+            return
+
+        value = str(total_sample_qty)
+        existing_result = await self._session.execute(
+            select(QuestionAnswerModel).where(
+                QuestionAnswerModel.checklist_stage_id == stage.id,
+                QuestionAnswerModel.stage_question_mapping_id == mapping.id,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            existing.textbox_value = value
+            existing.modified_by = str(user_id)
+            existing.modified_date = now
+        else:
+            await self._qa_repo.create(QuestionAnswer(
+                checklist_stage_id=stage.id,
+                question_id=mapping.question_id,
+                stage_question_mapping_id=mapping.id,
+                textbox_value=value,
+                created_by=str(user_id),
+                modified_by=str(user_id),
+            ))
+        await self._session.flush()
+
+    async def _populate_start_date(
+        self, stage: ChecklistStageModel, user_id: int, now: datetime,
+    ) -> None:
+        """Stamp the stage's question whose mapping has custom_answers =
+        'StartDate' with the current date/time (analysis start date), set on
+        submit. Upserts the question_answer's date_time."""
+        if not stage.format_stage_mapping_id:
+            return
+        mapping_result = await self._session.execute(
+            select(StageQuestionMappingModel).where(
+                StageQuestionMappingModel.format_stage_mapping_id
+                == stage.format_stage_mapping_id,
+                StageQuestionMappingModel.custom_answers == CustomAnswer.START_DATE.value,
+            )
+        )
+        mapping = mapping_result.scalars().first()
+        if mapping is None:
+            return
+
+        existing_result = await self._session.execute(
+            select(QuestionAnswerModel).where(
+                QuestionAnswerModel.checklist_stage_id == stage.id,
+                QuestionAnswerModel.stage_question_mapping_id == mapping.id,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            # Only set once — don't overwrite a previously stamped start date.
+            if existing.date_time is None:
+                existing.date_time = now
+                existing.modified_by = str(user_id)
+                existing.modified_date = now
+        else:
+            await self._qa_repo.create(QuestionAnswer(
+                checklist_stage_id=stage.id,
+                question_id=mapping.question_id,
+                stage_question_mapping_id=mapping.id,
+                date_time=now,
+                created_by=str(user_id),
+                modified_by=str(user_id),
+            ))
+        await self._session.flush()
+
+    async def _populate_end_date(
+        self, cr: ChecklistRequestModel, user_id: int, now: datetime,
+    ) -> None:
+        """Stamp the request's Basic Details question whose mapping has
+        custom_answers = 'EndDate' (Analysis Completion Date) with the current
+        date/time. Called on the analyst's final submit. Overwrites any previous
+        value (the completion date reflects the latest submit)."""
+        basic_result = await self._session.execute(
+            select(ChecklistStageModel)
+            .join(
+                FormatStageMappingModel,
+                FormatStageMappingModel.id == ChecklistStageModel.format_stage_mapping_id,
+            )
+            .join(StageModel, StageModel.id == FormatStageMappingModel.stage_id)
+            .where(
+                ChecklistStageModel.checklist_request_id == cr.id,
+                StageModel.stage_name == BASIC_DETAILS,
+            )
+            .limit(1)
+        )
+        basic_stage = basic_result.scalar_one_or_none()
+        if basic_stage is None or not basic_stage.format_stage_mapping_id:
+            return
+
+        mapping_result = await self._session.execute(
+            select(StageQuestionMappingModel).where(
+                StageQuestionMappingModel.format_stage_mapping_id
+                == basic_stage.format_stage_mapping_id,
+                StageQuestionMappingModel.custom_answers == CustomAnswer.END_DATE.value,
+            )
+        )
+        mapping = mapping_result.scalars().first()
+        if mapping is None:
+            return
+
+        existing_result = await self._session.execute(
+            select(QuestionAnswerModel).where(
+                QuestionAnswerModel.checklist_stage_id == basic_stage.id,
+                QuestionAnswerModel.stage_question_mapping_id == mapping.id,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            existing.date_time = now
+            existing.modified_by = str(user_id)
+            existing.modified_date = now
+        else:
+            await self._qa_repo.create(QuestionAnswer(
+                checklist_stage_id=basic_stage.id,
+                question_id=mapping.question_id,
+                stage_question_mapping_id=mapping.id,
+                date_time=now,
+                created_by=str(user_id),
+                modified_by=str(user_id),
+            ))
+        await self._session.flush()
 
     # ── status_format ──────────────────────────────────────────────────────────
 
@@ -568,6 +826,64 @@ class StageActionBase:
                     cr.status_format = f"{name} - Approval Pending"
                     return
         cr.status_format = ""
+
+    # ── recon-sheet vial issuing ────────────────────────────────────────────────
+
+    async def _is_submit_label_role(self, cs: ChecklistStageModel, role_id: int | None) -> bool:
+        """True when `role_id` is a role configured on the stage's FIRST approval
+        label (the SUBMIT label). For the recon Test stage this is the Analyst
+        label — so this tells supervisor (approve label) from analyst (submit
+        label) when both act while the stage is still Initial."""
+        if role_id is None or not cs.format_stage_mapping_id:
+            return False
+        fsm_result = await self._session.execute(
+            select(FormatStageMappingModel).where(
+                FormatStageMappingModel.id == cs.format_stage_mapping_id
+            )
+        )
+        fsm = fsm_result.scalar_one_or_none()
+        if not fsm:
+            return False
+        first_label_result = await self._session.execute(
+            select(ApprovalLabelModel.id).where(
+                ApprovalLabelModel.stage_id == fsm.stage_id,
+                ApprovalLabelModel.is_active.is_(True),
+            ).order_by(ApprovalLabelModel.id).limit(1)
+        )
+        first_label_id = first_label_result.scalar_one_or_none()
+        if first_label_id is None:
+            return False
+        roles_result = await self._session.execute(
+            select(ApprovalLabelUserRoleModel.role_id).where(
+                ApprovalLabelUserRoleModel.approval_label_id == first_label_id
+            )
+        )
+        submit_role_ids = {r[0] for r in roles_result.fetchall()}
+        return role_id in submit_role_ids
+
+    async def _has_unissued_vials(self, stage: ChecklistStageModel) -> bool:
+        """True when the stage still has vials to issue (recon sheet).
+
+        Ports the Mendix check: on this stage, any question_answer that
+          - is NOT a declaration question (mapping null, or is_declaration=false)
+          - has_vails = true
+          - received_by_date is empty
+        means a vial is still unissued. If none exist, all vials are issued.
+        """
+        decl_subq = (
+            select(StageQuestionMappingModel.id)
+            .where(StageQuestionMappingModel.is_declaration_question.is_(True))
+        )
+        result = await self._session.execute(
+            select(QuestionAnswerModel.id).where(
+                QuestionAnswerModel.checklist_stage_id == stage.id,
+                QuestionAnswerModel.has_vails.is_(True),
+                QuestionAnswerModel.received_by_date.is_(None),
+                QuestionAnswerModel.stage_question_mapping_id.notin_(decl_subq)
+                | QuestionAnswerModel.stage_question_mapping_id.is_(None),
+            ).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     # ── utilities ────────────────────────────────────────────────────────────────
 

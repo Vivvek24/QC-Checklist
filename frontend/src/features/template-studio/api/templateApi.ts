@@ -64,6 +64,8 @@ export interface TemplateStageSaveRequest {
   stage_id: number;
   rows: StageSaveRowInput[];
   columns: TemplateColumnInput[];
+  /** The stage's declaration-grid columns (saved with is_declaration=true). */
+  declaration_columns?: TemplateColumnInput[];
   sections: StageSaveSectionInput[];
   deleted_mapping_ids: number[];
   deleted_section_ids: number[];

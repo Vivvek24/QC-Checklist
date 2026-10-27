@@ -194,7 +194,10 @@ class ChecklistPdfRenderer:
             # unheaded group (no section) renders just its table.
             if group.section_name.strip():
                 flow.append(Paragraph(_esc(group.section_name), self._styles["subsection"]))
-            if group.rows:
+            # Only render the table when columns are configured for this scope
+            # (matches the create request page, which shows only configured
+            # columns). A scope with rows but no columns renders nothing.
+            if group.rows and group.columns:
                 flow.append(self._build_table(group))
 
         # Declaration questions (if any) render just above the remarks, under a

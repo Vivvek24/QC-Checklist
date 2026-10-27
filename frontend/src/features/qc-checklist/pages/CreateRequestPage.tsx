@@ -15,9 +15,8 @@ import { Tag } from 'primereact/tag';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { ChecklistHeader } from '../components/ChecklistHeader';
 import { TemplateDrivenSnip } from '../components/TemplateDrivenSnip';
-import { ReconcilationSheetSnip } from '../components/ReconcilationSheetSnip';
 import { ApprovalSnip } from '../components/ApprovalSnip';
-import { FORMAT_TYPE, BASIC_DETAILS_STAGE } from '../../masters/constants';
+import { BASIC_DETAILS_STAGE } from '../../masters/constants';
 import { useCreateRequestPage } from '../hooks/useCreateRequestPage';
 import { deriveStageFlags, statusColor, statusLabel, visibleStages } from '../utils/stageStatus';
 
@@ -28,11 +27,80 @@ export const CreateRequestPage = () => {
     toastRef, requestNumber, formatOptions, formatsLoading, selectedFormatId,
     canInitiate, userNameById, onFormatChange, goToDashboard,
     loading, preview, isContinuation, expandedStages, stageColumns,
-    savedAnswersByFsm, savedSubAnswersByFsm, approvalMappingsByFsm, questionApprovalMappings, sqmByQuestionAnswerId, submitting, snipRefs, approvalRefs,
+    savedAnswersByFsm, savedSubAnswersByFsm, approvalMappingsByFsm, questionApprovalMappings, sqmByQuestionAnswerId, testRowsByFsm, previewTestRowsForProduct, submitting, snipRefs, approvalRefs,
     toggleStage, handleSubmit, handleSaveAsDraft, handleApprove, handleReferBack,
   } = useCreateRequestPage();
 
   const stages = preview ? visibleStages(preview.stages, isContinuation) : [];
+
+  const isRecon = preview?.format_type === 'ReconcilationSheet';
+
+  // Recon analyst phase: all vials on the Test stage have been issued (there
+  // are test rows and none are still unissued). In this phase the analyst fills
+  // their remarks + destroyed samples — and the is_calculated "Sample Quantity
+  // Received" on the (otherwise read-only) Basic Details stage becomes editable
+  // + required.
+  const reconAnalystPhase = (): boolean => {
+    if (!isRecon) return false;
+    const testFsm = preview?.stages.find((s) => s.stage_name !== BASIC_DETAILS_STAGE
+      && (testRowsByFsm[s.format_stage_mapping_id]?.length ?? 0) > 0);
+    if (!testFsm) return false;
+    // The analyst phase is only "live" while the Test stage is still fillable
+    // (Initial/Draft/ReferBack). Once the analyst submits, it goes Pending —
+    // then the supervisor is approving (read-only), NOT the analyst phase, so
+    // the calculated row must not become editable for them.
+    const fillable = ['Initial', 'Draft', 'ReferBack'].includes(testFsm.status);
+    if (!fillable) return false;
+    const rows = testRowsByFsm[testFsm.format_stage_mapping_id] ?? [];
+    // Vial-bearing rows only — rows with has_vails are the ones the supervisor
+    // must issue. The analyst phase begins ONLY once at least one such row
+    // exists AND every one of them has been issued (issuer_name set). An
+    // all-unissued stage (fresh supervisor arrival) is NOT the analyst phase,
+    // so the Calculate Vials button / calculated unlock stay hidden for them.
+    const vialRows = rows.filter((r) => r.has_vails);
+    if (vialRows.length === 0) return false;
+    return vialRows.every((r) => (r.issuer_name ?? '').trim() !== '');
+  };
+
+  // In-memory "Calculate Vials" for the Calculate_SampleDestroyed question:
+  //   destroyed = (Basic Details is_calculated answer_total_vails)
+  //             -  parseInt(Test stage Sample Consumed textbox)
+  // Reads the live Basic Details grid total + the Test stage's consumed value
+  // already loaded in the UI — no backend round-trip. Returns a validation
+  // message instead of a value when the product isn't picked or result < 0.
+  const computeSampleDestroyed = (testFsmId: number): { value?: number; error?: string } => {
+    if (!preview) return { error: 'Not ready.' };
+    const basic = preview.stages.find((s) => s.stage_name === BASIC_DETAILS_STAGE);
+
+    // received_total — prefer the Basic Details grid's live answers (the analyst
+    // may have just edited the is_calculated value), else the saved total.
+    let receivedTotal = 0;
+    if (basic) {
+      const basicFsm = basic.format_stage_mapping_id;
+      const liveBasic = snipRefs.current[basicFsm]?.getAnswers?.() ?? [];
+      const calcQ = basic.questions.find((q) => q.is_calculated);
+      if (calcQ) {
+        const live = liveBasic.find((a) => a.stage_question_mapping_id === calcQ.stage_question_mapping_id);
+        receivedTotal = live?.answer_total_vails
+          ?? savedAnswersByFsm[basicFsm]?.[calcQ.stage_question_mapping_id]?.answer_total_vails
+          ?? 0;
+      }
+    }
+
+    // consumed — the Test stage's Calculate_SampleConsumed saved answer textbox.
+    const testStage = preview.stages.find((s) => s.format_stage_mapping_id === testFsmId);
+    const consumedQ = testStage?.questions.find((q) => q.custom_answers === 'Calculate_SampleConsumed');
+    const consumedStr = consumedQ
+      ? (savedAnswersByFsm[testFsmId]?.[consumedQ.stage_question_mapping_id]?.textbox_value ?? '')
+      : '';
+    if (!consumedStr.trim()) return { error: 'Please select product !' };
+
+    const destroyed = receivedTotal - parseInt(consumedStr.trim(), 10);
+    if (destroyed < 0) {
+      return { error: 'Please Check Sample Quantity received total as calculation value cannot be negative!' };
+    }
+    return { value: destroyed };
+  };
 
   return (
     <div className="p-3">
@@ -136,31 +204,27 @@ export const CreateRequestPage = () => {
                   {/* Expanded — grid + approval */}
                   {isExpanded && (
                     <div style={{ borderTop: '1px solid #fca5a5' }}>
-                      {preview.format_type === FORMAT_TYPE.RECONCILATION_SHEET ? (
-                        <ReconcilationSheetSnip
-                          ref={(el) => { snipRefs.current[fsmId] = el; }}
-                          questions={stage.questions}
-                          sections={stage.sections ?? []}
-                          stageName={stage.stage_name}
-                          stageStatus={stage.status}
-                          hasSection={stage.has_section}
-                        />
-                      ) : (
-                        <TemplateDrivenSnip
-                          ref={(el) => { snipRefs.current[fsmId] = el; }}
-                          questions={stage.questions}
-                          columns={stageColumns[fsmId] ?? []}
-                          sections={stage.sections ?? []}
-                          hasSection={stage.has_section}
-                          stageName={stage.stage_name}
-                          stageStatus={stage.status}
-                          savedAnswers={savedAnswersByFsm[fsmId]}
-                          savedSubAnswers={savedSubAnswersByFsm[fsmId]}
-                          questionApprovalMappings={questionApprovalMappings}
-                          sqmByQuestionAnswerId={sqmByQuestionAnswerId}
-                          userNameById={userNameById}
-                        />
-                      )}
+                      {/* Every format type renders through the single
+                          template-driven grid (column layout from Template
+                          Studio); ReconcilationSheet is no longer special. */}
+                      <TemplateDrivenSnip
+                        ref={(el) => { snipRefs.current[fsmId] = el; }}
+                        questions={stage.questions}
+                        columns={stageColumns[fsmId] ?? []}
+                        sections={stage.sections ?? []}
+                        hasSection={stage.has_section}
+                        stageName={stage.stage_name}
+                        stageStatus={stage.status}
+                        savedAnswers={savedAnswersByFsm[fsmId]}
+                        savedSubAnswers={savedSubAnswersByFsm[fsmId]}
+                        questionApprovalMappings={questionApprovalMappings}
+                        sqmByQuestionAnswerId={sqmByQuestionAnswerId}
+                        testRows={testRowsByFsm[fsmId]}
+                        onProductSelected={isBasicDetails ? previewTestRowsForProduct : undefined}
+                        userNameById={userNameById}
+                        isReconSheet={isRecon && !reconAnalystPhase()}
+                        unlockCalculated={isBasicDetails && reconAnalystPhase()}
+                      />
 
                       {stage.stage_name !== BASIC_DETAILS_STAGE && (
                         <>
@@ -169,12 +233,15 @@ export const CreateRequestPage = () => {
                             questions={stage.questions}
                             approvalLabels={stage.approval_labels}
                             hasDeclarationQuestion={preview.has_declaration_question}
+                            declarationColumns={stage.declaration_columns}
                             mappings={approvalMappingsByFsm[fsmId]}
                             canAct={isFillable || isApprovable}
                             canFillDeclarations={isFillable}
                             stageStatus={stage.status}
                             userNameById={userNameById}
                             savedAnswers={savedAnswersByFsm[fsmId]}
+                            canCalculateDestroyed={isFillable && reconAnalystPhase()}
+                            computeDestroyed={() => computeSampleDestroyed(fsmId)}
                           />
 
                           {/* Action buttons — driven by label count + status:

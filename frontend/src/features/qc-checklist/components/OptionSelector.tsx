@@ -23,18 +23,16 @@ export const OptionSelector = ({ answerType, options, value, onChange, disabled 
     // Coerce a stray scalar/null to a safe array so it can never crash.
     const multiValue = Array.isArray(value) ? value : value == null ? [] : [value];
     return (
-      <MultiSelect value={multiValue} placeholder="" className="w-full" options={opts} filter
-        display="chip" onChange={(e) => onChange(e.value)} disabled={disabled}
-        style={{ minHeight: '1.85rem', fontSize: '0.75rem' }} />
+      <MultiSelect value={multiValue} placeholder="" className="qc-grid-dropdown w-full" options={opts} filter
+        display="chip" onChange={(e) => onChange(e.value)} disabled={disabled} />
     );
   }
 
   if (answerType === 'Dropdown (single select)') {
     return (
-      <Dropdown value={value || null} placeholder="" className="w-full" options={opts} filter
+      <Dropdown value={value || null} placeholder="" className="qc-grid-dropdown w-full" options={opts} filter
         showClear disabled={disabled}
-        onChange={(e) => onChange(e.value)}
-        style={{ height: '1.85rem', fontSize: '0.75rem' }} />
+        onChange={(e) => onChange(e.value)} />
     );
   }
 

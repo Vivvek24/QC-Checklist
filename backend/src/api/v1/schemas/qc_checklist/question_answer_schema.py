@@ -81,6 +81,11 @@ class QuestionAnswerResponse(BaseModel):
     issuer_name: str
     is_issued_vails: bool
     has_vails: bool
+    # Resolved display name of the receiving analyst (receiver_user_id →
+    # user_details.employee_name). Empty when no receiver is set.
+    receiver_name: str = ""
+    # Calculated-question "+ Add" helper values (text_box_value per helper row).
+    helpers: list[str] = []
     created_by: str
     created_date: datetime
     modified_by: str
@@ -92,3 +97,22 @@ class QuestionAnswerListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class SubAnswerItem(BaseModel):
+    """One sub-question's saved answer under a parent question."""
+    question_id: int
+    question_option_id: int | None = None
+    response_question_option_id: int | None = None
+    textbox_value: str = ""
+    response_answer: str = ""
+
+
+class ParentSubAnswers(BaseModel):
+    """A parent question's saved sub-answers (grouped for the fill page)."""
+    parent_question_id: int
+    sub_answers: list[SubAnswerItem]
+
+
+class SubAnswersResponse(BaseModel):
+    items: list[ParentSubAnswers]

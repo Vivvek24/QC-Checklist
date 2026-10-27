@@ -81,6 +81,7 @@ class TemplateStageSaveRequest(BaseModel):
     stage_id: int = Field(..., gt=0)
     rows: list[StageSaveRowInput] = Field(default_factory=list)
     columns: list[StageSaveColumnInput] = Field(default_factory=list)
+    declaration_columns: list[StageSaveColumnInput] = Field(default_factory=list)
     sections: list[StageSaveSectionInput] = Field(default_factory=list)
     deleted_mapping_ids: list[int] = Field(default_factory=list)
     deleted_section_ids: list[int] = Field(default_factory=list)
@@ -91,6 +92,7 @@ class TemplateStageSaveRequest(BaseModel):
             stage_id=self.stage_id,
             rows=[r.to_dto() for r in self.rows],
             columns=[c.to_dto() for c in self.columns],
+            declaration_columns=[c.to_dto() for c in self.declaration_columns],
             sections=[s.to_dto() for s in self.sections],
             deleted_mapping_ids=self.deleted_mapping_ids,
             deleted_section_ids=self.deleted_section_ids,

@@ -41,6 +41,24 @@ export interface SnipHandle {
   getQuestionApprovals?: () => QuestionApprovalInput[];
 }
 
+/** An auto-generated per-test row (persisted question_answer with no
+ * stage_question_mapping / question — its test_title acts as the row title).
+ * Rendered as read-only grid rows by TemplateDrivenSnip. */
+export interface TestRow {
+  id: number;
+  test_title: string;
+  sample_vails: string;
+  has_vails: boolean;
+  serial_number: number;
+  /** Issue Vials state for the row. */
+  receiver_user_id: number | null;
+  receiver_name: string;
+  issuer_name: string;
+  issued_by_date: string | null;
+  received_by_date: string | null;
+  is_issued_vails: boolean;
+}
+
 export interface UseChecklistWorkflowResult {
   loading: boolean;
   preview: ChecklistPreview | null;
@@ -60,6 +78,14 @@ export interface UseChecklistWorkflowResult {
   questionApprovalMappings: ApprovalLabelMappingResponse[];
   /** question_answer_id -> stage_question_mapping_id, from the loaded answers. */
   sqmByQuestionAnswerId: Record<number, number>;
+  /** Auto-generated per-test rows keyed by format_stage_mapping_id (rows whose
+   * stage_question_mapping_id is null — their test_title is the row title). */
+  testRowsByFsm: Record<number, TestRow[]>;
+  /** Preview the per-test rows a product expands into, on the stage after
+   * Basic Details — called from the Masters product dropdown's onChange. These
+   * are shown immediately but only persisted when the stage is submitted.
+   * Passing null clears the previewed rows. */
+  previewTestRowsForProduct: (productId: number | null) => Promise<void>;
   /** True while an action (submit/approve/draft/refer-back) is in flight. */
   submitting: boolean;
   snipRefs: React.RefObject<Record<number, SnipHandle | null>>;
@@ -101,6 +127,7 @@ export const useChecklistWorkflow = ({
   // -> stage_question_mapping_id map, so the grid can pre-fill acted remarks.
   const [questionApprovalMappings, setQuestionApprovalMappings] = useState<ApprovalLabelMappingResponse[]>([]);
   const [sqmByQuestionAnswerId, setSqmByQuestionAnswerId] = useState<Record<number, number>>({});
+  const [testRowsByFsm, setTestRowsByFsm] = useState<Record<number, TestRow[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const snipRefs = useRef<Record<number, SnipHandle | null>>({});
   const approvalRefs = useRef<Record<number, ApprovalSnipHandle | null>>({});
@@ -135,6 +162,7 @@ export const useChecklistWorkflow = ({
     setApprovalMappingsByFsm({});
     setQuestionApprovalMappings([]);
     setSqmByQuestionAnswerId({});
+    setTestRowsByFsm({});
     if (!nextFormatId) {
       setPreview(null);
       setFormatId(null);
@@ -166,6 +194,7 @@ export const useChecklistWorkflow = ({
     setApprovalMappingsByFsm({});
     setQuestionApprovalMappings([]);
     setSqmByQuestionAnswerId({});
+    setTestRowsByFsm({});
     try {
       const request = await qcChecklistApi.getRequestByNumber(requestNumber);
       if (!request) {
@@ -199,6 +228,7 @@ export const useChecklistWorkflow = ({
       const subAnswersMap: Record<number, Record<number, SavedSubAnswer[]>> = {};
       const mappingsMap: Record<number, ApprovalLabelMappingResponse[]> = {};
       const qaToSqm: Record<number, number> = {};
+      const testMap: Record<number, TestRow[]> = {};
       const fetchPromises: Promise<void>[] = [];
 
       // Per-question approval mappings for the whole request (keyed by
@@ -224,27 +254,56 @@ export const useChecklistWorkflow = ({
         );
 
         // Load saved answers for any stage that already has data. 'Initial'
-        // is a freshly-opened stage with nothing filled yet; every other
-        // status (Draft/ReferBack = editable with prior answers; Pending/
-        // Approved = read-only view) has persisted answers to pre-populate.
-        if (status !== 'Initial') {
+        // is normally a freshly-opened stage with nothing filled yet — EXCEPT
+        // for a ReconcilationSheet, whose Test stage carries the auto-generated
+        // per-test (Issue Vials) rows while it stays Initial through the
+        // supervisor's issuing phase. So for recon, also load Initial stages so
+        // those test rows show on the fill-next-stage page.
+        const isRecon = data.format_type === 'ReconcilationSheet';
+        if (status !== 'Initial' || isRecon) {
           fetchPromises.push(
             qcChecklistApi.listAnswersForStage(stageId).then((rows) => {
               const byQuestion: Record<number, SavedAnswer> = {};
+              const testRows: TestRow[] = [];
               for (const r of rows) {
                 if (r.stage_question_mapping_id != null) {
                   byQuestion[r.stage_question_mapping_id] = {
                     textbox_value: r.textbox_value || '',
                     question_option_id: r.question_option_id,
                     response_question_option_id: r.response_question_option_id,
+                    product_id: r.product_id,
+                    date_time: r.date_time ?? null,
                     response_answer: r.response_answer || '',
+                    answer_total_vails: r.answer_total_vails ?? 0,
+                    helpers: r.helpers ?? [],
                   };
                   // question_answer_id -> sqm, so per-question approval mappings
                   // (keyed by question_answer_id) can attach to the right row.
                   qaToSqm[r.id] = r.stage_question_mapping_id;
+                } else if (r.test_title) {
+                  // Auto-generated per-test row (no stage_question_mapping):
+                  // its test_title acts as the row title, sample_vails its
+                  // sample description. Rendered as read-only grid rows.
+                  testRows.push({
+                    id: r.id,
+                    test_title: r.test_title,
+                    sample_vails: r.sample_vails || '',
+                    has_vails: r.has_vails,
+                    serial_number: r.serial_number,
+                    receiver_user_id: r.receiver_user_id ?? null,
+                    receiver_name: r.receiver_name || '',
+                    issuer_name: r.issuer_name || '',
+                    issued_by_date: r.issued_by_date ?? null,
+                    received_by_date: r.received_by_date ?? null,
+                    is_issued_vails: r.is_issued_vails ?? false,
+                  });
                 }
               }
               answersMap[fsm] = byQuestion;
+              if (testRows.length > 0) {
+                testRows.sort((a, b) => a.serial_number - b.serial_number);
+                testMap[fsm] = testRows;
+              }
             })
           );
           // Saved sub-question answers, grouped by parent question_id.
@@ -270,6 +329,7 @@ export const useChecklistWorkflow = ({
       setApprovalMappingsByFsm(mappingsMap);
       setQuestionApprovalMappings(questionApprovals);
       setSqmByQuestionAnswerId(qaToSqm);
+      setTestRowsByFsm(testMap);
 
       // Overlay the live stage statuses from the persisted request onto the
       // format preview, so the page renders the actual fillable stage(s)
@@ -303,6 +363,8 @@ export const useChecklistWorkflow = ({
       response_answer: a.response_answer,
       product_id: a.product_id ?? null,
       date_time: a.date_time ?? null,
+      has_helper: a.has_helper ?? false,
+      answer_total_vails: a.answer_total_vails ?? 0,
       helpers: a.helpers.length > 0 ? a.helpers : [],
       sub_answers: a.sub_answers && a.sub_answers.length > 0 ? a.sub_answers : undefined,
     }));
@@ -311,13 +373,28 @@ export const useChecklistWorkflow = ({
    * so on the first submit of a new request its answers are sent as an extra
    * stage. The backend persists them and advances Basic Details to Pending so
    * the request becomes visible on the dashboard. */
+  /** Recon analyst phase: all vials on the Test stage have been issued. In this
+   * phase the analyst edits the is_calculated "Sample Quantity Received" on the
+   * (Pending) Basic Details stage, so it must ride along on the submit. */
+  const isReconAnalystPhase = (): boolean => {
+    if (preview?.format_type !== 'ReconcilationSheet') return false;
+    const testStage = preview.stages.find((s) => s.stage_name !== BASIC_DETAILS_STAGE
+      && (testRowsByFsm[s.format_stage_mapping_id]?.length ?? 0) > 0);
+    if (!testStage) return false;
+    const rows = testRowsByFsm[testStage.format_stage_mapping_id] ?? [];
+    return rows.length > 0 && !rows.some((r) => r.has_vails && !r.received_by_date);
+  };
+
   const buildBasicDetailsExtra = (submittedFsmId: number): SubmitStageExtra[] => {
     if (!preview) return [];
     const basic = preview.stages.find((s) => s.stage_name === BASIC_DETAILS_STAGE);
-    // Nothing to do if there's no Basic Details, it's the stage being
-    // submitted, or it's already past its fillable state.
+    // Nothing to do if there's no Basic Details or it's the stage being submitted.
     if (!basic || basic.format_stage_mapping_id === submittedFsmId) return [];
-    if (!['Initial', 'Draft', 'ReferBack'].includes(basic.status)) return [];
+    // Normally only ride along while Basic Details is still fillable. In the
+    // recon analyst phase it's Pending but the analyst just edited the
+    // is_calculated answer, so include it then too.
+    const fillable = ['Initial', 'Draft', 'ReferBack'].includes(basic.status);
+    if (!fillable && !isReconAnalystPhase()) return [];
 
     const basicRef = snipRefs.current[basic.format_stage_mapping_id];
     const basicAnswers = basicRef?.getAnswers() ?? [];
@@ -372,14 +449,25 @@ export const useChecklistWorkflow = ({
     const snipRef = snipRefs.current[fsmId];
     if (snipRef && !snipRef.validate()) allValid = false;
 
+    // Recon sheet: the remark is NOT mandatory during the supervisor's vial-
+    // issuing phase. It becomes mandatory in the analyst phase (all vials
+    // issued), which is where the analyst submits with their remark. Other
+    // formats always require it.
+    const isReconSheet = preview?.format_type === 'ReconcilationSheet';
+    const analystPhase = isReconAnalystPhase();
+    const skipRemark = isReconSheet && !analystPhase;
+
     const approvalRef = approvalRefs.current[fsmId];
-    if (approvalRef && !approvalRef.validateRemark()) allValid = false;
+    if (!skipRemark && approvalRef && !approvalRef.validateRemark()) allValid = false;
     if (approvalRef && !approvalRef.validateDeclarations()) allValid = false;
 
-    // On first submit, Basic Details rides along — validate its grid too.
+    // Basic Details rides along + is validated when it's still fillable (first
+    // submit) OR in the recon analyst phase (where the analyst edited its
+    // is_calculated "Sample Quantity Received" — its required check must hit).
     if (preview) {
       const basic = preview.stages.find((s) => s.stage_name === BASIC_DETAILS_STAGE);
-      if (basic && basic.format_stage_mapping_id !== fsmId && ['Initial', 'Draft', 'ReferBack'].includes(basic.status)) {
+      const basicFillable = basic && ['Initial', 'Draft', 'ReferBack'].includes(basic.status);
+      if (basic && basic.format_stage_mapping_id !== fsmId && (basicFillable || analystPhase)) {
         const basicSnip = snipRefs.current[basic.format_stage_mapping_id];
         if (basicSnip && !basicSnip.validate()) allValid = false;
       }
@@ -452,6 +540,83 @@ export const useChecklistWorkflow = ({
     }
   };
 
+  /** The format_stage_mapping_id of the stage immediately after Basic Details
+   * (preview stages are already in format-stage order). Null if there's no
+   * Basic Details or no following stage. */
+  const nextFsmAfterBasicDetails = (): number | null => {
+    if (!preview) return null;
+    const idx = preview.stages.findIndex((s) => s.stage_name === BASIC_DETAILS_STAGE);
+    if (idx < 0 || idx + 1 >= preview.stages.length) return null;
+    return preview.stages[idx + 1]!.format_stage_mapping_id;
+  };
+
+  /** Preview the per-test rows a product expands into on the next stage. Mirrors
+   * the backend _expand_product_tests mapping (test_title = test name,
+   * sample_vails = sample description, has_vails = sample_qty != 0) but only in
+   * memory — persistence happens on submit. */
+  const previewTestRowsForProduct = async (productId: number | null): Promise<void> => {
+    const nextFsm = nextFsmAfterBasicDetails();
+    if (nextFsm == null) return;
+    if (productId == null) {
+      setTestRowsByFsm((prev) => ({ ...prev, [nextFsm]: [] }));
+      seedSampleConsumed(nextFsm, 0);
+      return;
+    }
+    try {
+      const tests = await qcChecklistApi.listTestsForProduct(productId);
+      const rows: TestRow[] = tests.map((t, i) => ({
+        id: -(t.id || i + 1), // negative synthetic id — not a persisted row yet
+        receiver_user_id: null,
+        receiver_name: '',
+        issuer_name: '',
+        issued_by_date: null,
+        received_by_date: null,
+        is_issued_vails: false,
+        test_title: t.test_name,
+        sample_vails: t.sample_description || '',
+        has_vails: t.sample_qty !== 0,
+        serial_number: i + 1,
+      }));
+      setTestRowsByFsm((prev) => ({ ...prev, [nextFsm]: rows }));
+
+      // Populate the next stage's "Calculate_SampleConsumed" question with the
+      // total of the SAME tests' sample_qty (consistent with the test rows).
+      const total = tests.reduce((sum, t) => sum + (t.sample_qty ?? 0), 0);
+      seedSampleConsumed(nextFsm, total);
+    } catch (e) {
+      onError(apiErrorMessage(e) || 'Failed to load product tests');
+    }
+  };
+
+  /** Seed (or clear) the next stage's Calculate_SampleConsumed answer with a
+   * computed total, written as a saved answer keyed by that question's
+   * stage_question_mapping_id so the stage's grid / declaration grid shows it
+   * (read-only). */
+  const seedSampleConsumed = (fsm: number, total: number) => {
+    const stage = preview?.stages.find((s) => s.format_stage_mapping_id === fsm);
+    if (!stage) return;
+    const allQ = [
+      ...stage.questions,
+      ...stage.sections.flatMap((sec) => sec.questions),
+    ];
+    const target = allQ.find((q) => q.custom_answers === 'Calculate_SampleConsumed');
+    if (!target) return;
+    const key = target.stage_question_mapping_id;
+    setSavedAnswersByFsm((prev) => {
+      const forFsm = { ...(prev[fsm] ?? {}) };
+      forFsm[key] = {
+        ...(forFsm[key] ?? {
+          question_option_id: null,
+          response_question_option_id: null,
+          product_id: null,
+          response_answer: '',
+        }),
+        textbox_value: String(total),
+      };
+      return { ...prev, [fsm]: forFsm };
+    });
+  };
+
   return {
     loading,
     preview,
@@ -464,6 +629,8 @@ export const useChecklistWorkflow = ({
     approvalMappingsByFsm,
     questionApprovalMappings,
     sqmByQuestionAnswerId,
+    testRowsByFsm,
+    previewTestRowsForProduct,
     submitting,
     snipRefs,
     approvalRefs,

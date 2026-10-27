@@ -15,9 +15,13 @@
  *  - OPTION    → select option (auto-populated from the row's picked question)
  *  - ANSWER    → enter answer; branches on the question's answer_type
  *  - RESPONSE  → YES / NO / N-A radio group (Chromatographic response)
+ *  - TEST_TITLE → the auto-generated test name for the row (read-only)
+ *  - SAMPLE_VIAL → the sample vial value for the row (entered at fill time)
+ *  - ISSUE_VAILS → an "Issue Vials" action button
+ *  - RECEIVE_VIALS → receive-vials column (fill-time rendering TBD)
  *  - AQL_LIMIT → AQL limit (auto from the row's picked question)
  */
-export type ColumnRender = 'SERIAL' | 'QUESTION' | 'OPTION' | 'ANSWER' | 'RESPONSE' | 'RESPONSE_QUESTION_OPTION' | 'AQL_LIMIT';
+export type ColumnRender = 'SERIAL' | 'QUESTION' | 'OPTION' | 'ANSWER' | 'RESPONSE' | 'RESPONSE_QUESTION_OPTION' | 'TEST_TITLE' | 'SAMPLE_VIAL' | 'ISSUE_VAILS' | 'RECEIVE_VIALS' | 'AQL_LIMIT';
 
 export interface ColumnRenderMeta {
   render: ColumnRender;
@@ -33,6 +37,10 @@ export const COLUMN_RENDERS: ColumnRenderMeta[] = [
   { render: 'ANSWER', label: 'Enter Answer', defaultHeader: 'Enter Answer' },
   { render: 'RESPONSE', label: 'Yes / No / N-A', defaultHeader: 'Response' },
   { render: 'RESPONSE_QUESTION_OPTION', label: 'Response Option (dropdown)', defaultHeader: 'Response' },
+  { render: 'TEST_TITLE', label: 'Test Title', defaultHeader: 'Test Title' },
+  { render: 'SAMPLE_VIAL', label: 'Sample Vial', defaultHeader: 'Sample Vial' },
+  { render: 'ISSUE_VAILS', label: 'Issue Vials', defaultHeader: 'Issue Vials' },
+  { render: 'RECEIVE_VIALS', label: 'Receive Vials', defaultHeader: 'Receive Vials' },
   { render: 'AQL_LIMIT', label: 'AQL Limit', defaultHeader: 'AQL Limit' },
 ];
 
@@ -102,6 +110,14 @@ export interface DesignStage {
   stageName: string;
   columns: DesignColumn[];
   rows: DesignRow[];
+  /**
+   * The stage's DECLARATION grid — its own rows (declaration questions) and
+   * column layout, configured independently of the normal grid and rendered
+   * in ApprovalSnip at fill time. Declaration rows are saved with
+   * is_declaration_question = true; normal `rows` stay is_declaration = false.
+   */
+  declarationColumns: DesignColumn[];
+  declarationRows: DesignRow[];
   /** Optional sections nested under this stage, each with its own table. */
   sections: DesignSection[];
   /**
@@ -133,6 +149,8 @@ export const emptyStage = (): DesignStage => ({
   stageName: '',
   columns: [],
   rows: [],
+  declarationColumns: [],
+  declarationRows: [],
   sections: [],
   hasSection: false,
 });

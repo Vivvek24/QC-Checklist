@@ -30,6 +30,9 @@ export interface SubmitStageAnswerInput {
   helpers: string[];
   product_id?: number | null;
   date_time?: string | null;
+  /** Calculated-question accumulation (parent textbox cleared; values in helpers). */
+  has_helper?: boolean;
+  answer_total_vails?: number;
   /** Answers for this question's sub-questions (if any). */
   sub_answers?: SubAnswerInput[];
 }
@@ -115,6 +118,23 @@ export interface SavedAnswerResponse {
   response_answer: string;
   product_id: number | null;
   date_time: string | null;
+  /** Accumulated total for a calculated question (answer_total_vails). */
+  answer_total_vails: number;
+  /** Calculated-question "+ Add" helper values. */
+  helpers: string[];
+  /** Auto-generated per-test row fields (set when a product expands into
+   * per-test rows; these rows have stage_question_mapping_id = null). */
+  test_title: string;
+  sample_vails: string;
+  has_vails: boolean;
+  serial_number: number;
+  /** Issue Vials state — who issued, who received, and when. */
+  receiver_user_id: number | null;
+  receiver_name: string;
+  issuer_name: string;
+  issued_by_date: string | null;
+  received_by_date: string | null;
+  is_issued_vails: boolean;
 }
 
 /** A persisted stage_approval_label_mappings row — who acted on each approval
@@ -232,4 +252,66 @@ export const qcChecklistApi = {
     link.remove();
     window.URL.revokeObjectURL(url);
   },
+
+  /** The tests configured for a product (test master). Used to preview the
+   * per-test rows a product expands into when it's picked on Basic Details —
+   * mirrors the backend _expand_product_tests mapping (nothing is persisted
+   * until the stage is submitted). */
+  listTestsForProduct: async (productId: number): Promise<ProductTestResponse[]> => {
+    const { data } = await apiClient.get<{ items: ProductTestResponse[] }>(
+      '/masters/test-masters',
+      { params: { product_id: productId } }
+    );
+    return data.items;
+  },
+
+  /** Active users with a given role code (e.g. ANALYST) — for the Issue Vials
+   * "Issued By" user dropdown. */
+  listUsersByRole: async (roleCode: string): Promise<RoleUserResponse[]> => {
+    const { data } = await apiClient.get<{ users: RoleUserResponse[] }>(
+      '/users/by-role',
+      { params: { role_code: roleCode } }
+    );
+    return data.users;
+  },
+
+  /** Persist the "Issue Vials" action on a test-row answer: records the
+   * receiving analyst and stamps the issue/received dates + issuer server-side.
+   * Returns the updated answer so the grid can reflect it immediately.
+   * Backed by POST /qc-checklist/question-answers/{answerId}/issue-vials. */
+  issueVials: async (answerId: number, receiverUserId: number): Promise<SavedAnswerResponse> => {
+    const { data } = await apiClient.post<SavedAnswerResponse>(
+      `/qc-checklist/question-answers/${answerId}/issue-vials`,
+      { receiver_user_id: receiverUserId }
+    );
+    return data;
+  },
+
+  /** Compute the "Remaining Samples destroyed By" value for a recon Test stage
+   * answer (received_total - sample_consumed), server-side. Returns the updated
+   * answer (textbox_value = destroyed). Throws 400 with the Mendix validation
+   * message when vials are unissued / product not picked / result negative.
+   * Backed by POST /qc-checklist/question-answers/{answerId}/calculate-sample-destroyed. */
+  calculateSampleDestroyed: async (answerId: number): Promise<SavedAnswerResponse> => {
+    const { data } = await apiClient.post<SavedAnswerResponse>(
+      `/qc-checklist/question-answers/${answerId}/calculate-sample-destroyed`,
+      {}
+    );
+    return data;
+  },
 };
+
+/** A user as returned by GET /users/by-role. */
+export interface RoleUserResponse {
+  id: number;
+  username: string;
+  employee_name: string | null;
+}
+
+/** A test master row as returned by GET /masters/test-masters?product_id=. */
+export interface ProductTestResponse {
+  id: number;
+  test_name: string;
+  sample_description: string;
+  sample_qty: number;
+}

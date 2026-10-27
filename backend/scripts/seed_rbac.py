@@ -145,6 +145,8 @@ _PERMISSION_TABLE = [
     # ─── QC Checklist ───
     ("menu.qc_checklist",              "MENU", "qc_checklist",        "READ",   "Create Request Page (initiate new requests)"),
     ("menu.qc_checklist_fill",         "MENU", "qc_checklist_fill",   "READ",   "Fill/Approve Request Page (open existing request from dashboard)"),
+    ("menu.qc_checklist.issue_vials",  "MENU", "qc_checklist.issue_vials", "READ", "Issue Vials action (recon sheet test rows)"),
+    ("qc_checklist.issue_vials",       "API",  "qc_checklist",             "EXECUTE", "Issue Vials — persist the issue action on a test row"),
     ("dashboard.read",                 "API", "dashboard",            "READ",   "View Dashboard Data"),
     ("checklist_requests.list",        "API", "checklist_requests",   "READ",   "List Checklist Requests"),
     ("checklist_requests.create",      "API", "checklist_requests",   "CREATE", "Create Checklist Request"),
@@ -197,9 +199,13 @@ DEFAULT_PERMISSIONS = [
     for c, s, r, a, n in _PERMISSION_TABLE
 ]
 
-# ADMINISTRATOR gets all permissions
+# ADMINISTRATOR gets all permissions. Other roles get a targeted subset —
+# the Issue Vials action is a supervisor responsibility, so SUPERVISOR is
+# granted the menu key that the UI gates the button on (no more hardcoded
+# role checks in the frontend).
 ROLE_PERMISSIONS: dict[str, list[str]] = {
     "ADMINISTRATOR": [p["code"] for p in DEFAULT_PERMISSIONS],
+    "SUPERVISOR": ["menu.qc_checklist.issue_vials", "qc_checklist.issue_vials"],
 }
 
 
@@ -242,13 +248,16 @@ async def seed() -> None:
                 perm_map[p["code"]] = new_perm.id
                 print(f"  [new]  Permission '{p['code']}' created")
 
-        # 3. Link all permissions to ADMINISTRATOR
-        role = (await session.execute(
-            select(RoleModel).where(RoleModel.code == "ADMINISTRATOR")
-        )).scalar_one_or_none()
+        # 3. Link permissions to each role in ROLE_PERMISSIONS (idempotent).
+        for role_code, perm_codes in ROLE_PERMISSIONS.items():
+            role = (await session.execute(
+                select(RoleModel).where(RoleModel.code == role_code)
+            )).scalar_one_or_none()
+            if not role:
+                print(f"  [warn] Role '{role_code}' not found — skipping its grants")
+                continue
 
-        if role:
-            for perm_code in ROLE_PERMISSIONS["ADMINISTRATOR"]:
+            for perm_code in perm_codes:
                 perm_id = perm_map.get(perm_code)
                 if perm_id is None:
                     continue
@@ -264,7 +273,7 @@ async def seed() -> None:
                     role_id=role.id, permission_id=perm_id,
                     created_by="seed_script", modified_by="seed_script",
                 ))
-                print(f"  [link] ADMINISTRATOR <- {perm_code}")
+                print(f"  [link] {role_code} <- {perm_code}")
 
         await uow.commit()
         print("\nOK RBAC seed complete.")

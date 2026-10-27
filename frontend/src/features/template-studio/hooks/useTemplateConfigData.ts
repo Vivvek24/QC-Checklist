@@ -59,13 +59,22 @@ const toDesignSection = (sec: SectionPreview): DesignSection => ({
 
 /** Build a DesignStage from a preview stage, or null if it has no saved data. */
 const toDesignStage = (stage: ChecklistStagePreview): DesignStage | null => {
-  const stageRows = stage.questions.map(toDesignRow);
+  // Declaration questions belong to the stage's own Declaration Grid, not the
+  // normal grid — split them out so each table owns its rows.
+  const allStageRows = stage.questions.map(toDesignRow);
+  const stageRows = allStageRows.filter((r) => !r.isDeclaration);
+  const declarationRows = allStageRows.filter((r) => r.isDeclaration);
   // Only sections that actually have rows and/or saved columns.
   const sections = stage.sections
     .filter((s) => s.questions.length > 0 || s.columns.length > 0)
     .map(toDesignSection);
 
-  const hasAnyData = stageRows.length > 0 || stage.columns.length > 0 || sections.length > 0;
+  const hasAnyData =
+    stageRows.length > 0 ||
+    declarationRows.length > 0 ||
+    stage.columns.length > 0 ||
+    (stage.declaration_columns?.length ?? 0) > 0 ||
+    sections.length > 0;
   if (!hasAnyData) return null;
 
   return {
@@ -75,6 +84,8 @@ const toDesignStage = (stage: ChecklistStagePreview): DesignStage | null => {
     stageName: stage.stage_name,
     rows: stageRows,
     columns: toDesignColumns(stage.columns),
+    declarationColumns: toDesignColumns(stage.declaration_columns ?? []),
+    declarationRows,
     sections,
     hasSection: stage.has_section,
   };

@@ -26,6 +26,7 @@ class QuestionAnswerPreviewDTO:
     section_name: str | None
     show_on_grid: bool
     answer_type: str
+    master_type: str | None
     has_text_box: bool
     has_multiple_text_box: bool
     has_sub_question: bool
@@ -42,6 +43,12 @@ class QuestionAnswerPreviewDTO:
     # (same shape as a stage's labels) so the grid can render a per-question
     # approval block under it.
     is_approvable: bool = False
+    # When true, picking a product (Masters answer) on the same stage auto-fills
+    # this question's answer with the product's storage_conditions.
+    has_associated_master: bool = False
+    # When true, the "+ Add" helper button runs the calculated-answer flow
+    # (positive-integer validation + running total; see TemplateCell).
+    is_calculated: bool = False
     sub_questions: list["QuestionAnswerPreviewDTO"] = field(default_factory=list)
     options: list[QuestionOptionPreviewDTO] = field(default_factory=list)
     response_options: list[QuestionOptionPreviewDTO] = field(default_factory=list)
@@ -89,6 +96,8 @@ class ChecklistStagePreviewDTO:
     sections: list[SectionPreviewDTO] = field(default_factory=list)
     approval_labels: list[ApprovalLabelPreviewDTO] = field(default_factory=list)
     columns: list[ColumnPreviewDTO] = field(default_factory=list)
+    # The stage's declaration-grid column layout (rendered in ApprovalSnip).
+    declaration_columns: list[ColumnPreviewDTO] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
