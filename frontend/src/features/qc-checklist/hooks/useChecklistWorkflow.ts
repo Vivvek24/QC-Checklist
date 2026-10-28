@@ -196,138 +196,101 @@ export const useChecklistWorkflow = ({
     setSqmByQuestionAnswerId({});
     setTestRowsByFsm({});
     try {
-      const request = await qcChecklistApi.getRequestByNumber(requestNumber);
-      if (!request) {
-        onError(`Request ${requestNumber} not found.`);
-        return;
-      }
-
-      const [data, stages] = await Promise.all([
-        qcChecklistApi.getPreview(request.format_id),
-        qcChecklistApi.listStagesForRequest(request.id),
-      ]);
+      // ONE aggregate call: the format preview tree + every stage's live
+      // status + all saved answers / sub-answers / approval mappings. Replaces
+      // the old per-stage fan-out (preview + stages + 3 requests per stage).
+      const detail = await qcChecklistApi.getRequestDetail(requestNumber);
+      const data = detail.preview;
 
       // Map persisted stages by their format_stage_mapping so submit can send
       // the real checklist_stage_id, and so the preview can reflect the live
       // per-stage status (which stage is fillable now).
       const stageIdMap: Record<number, number> = {};
       const statusByFsm: Record<number, string> = {};
-      for (const s of stages) {
+      for (const s of detail.stages) {
         if (s.format_stage_mapping_id != null) {
-          stageIdMap[s.format_stage_mapping_id] = s.id;
+          stageIdMap[s.format_stage_mapping_id] = s.checklist_stage_id;
           statusByFsm[s.format_stage_mapping_id] = s.status;
         }
       }
-      continuationRequestId.current = request.id;
+      continuationRequestId.current = detail.request_id;
       stageIdByFsm.current = stageIdMap;
       setIsContinuation(true);
 
-      // Load persisted answers for stages that already have data (any
-      // non-empty status that isn't a brand-new unopened stage).
+      // Build the per-stage maps directly from the aggregate's answer_blocks.
+      // The backend already decides which stages carry saved data (an 'Initial'
+      // stage is empty except for a ReconcilationSheet's auto-generated per-test
+      // rows), so there's no per-stage gating or extra fetching to do here.
       const answersMap: Record<number, Record<number, SavedAnswer>> = {};
       const subAnswersMap: Record<number, Record<number, SavedSubAnswer[]>> = {};
       const mappingsMap: Record<number, ApprovalLabelMappingResponse[]> = {};
       const qaToSqm: Record<number, number> = {};
       const testMap: Record<number, TestRow[]> = {};
-      const fetchPromises: Promise<void>[] = [];
 
-      // Per-question approval mappings for the whole request (keyed by
-      // question_answer_id) — pre-fills each question's acted approval remark.
-      let questionApprovals: ApprovalLabelMappingResponse[] = [];
-      fetchPromises.push(
-        qcChecklistApi.listQuestionApprovalMappingsForRequest(request.id).then((rows) => {
-          questionApprovals = rows;
-        })
-      );
+      for (const block of detail.answer_blocks) {
+        if (block.format_stage_mapping_id == null) continue;
+        const fsm = block.format_stage_mapping_id;
 
-      for (const [fsmStr, stageId] of Object.entries(stageIdMap)) {
-        const fsm = Number(fsmStr);
-        const status = statusByFsm[fsm];
-        if (!status || status === '') continue;
-
-        // Load approval-label mappings for ALL touched stages (so the
-        // approval snip can show who already acted on each label).
-        fetchPromises.push(
-          qcChecklistApi.listApprovalMappingsForStage(stageId).then((rows) => {
-            mappingsMap[fsm] = rows;
-          })
-        );
-
-        // Load saved answers for any stage that already has data. 'Initial'
-        // is normally a freshly-opened stage with nothing filled yet — EXCEPT
-        // for a ReconcilationSheet, whose Test stage carries the auto-generated
-        // per-test (Issue Vials) rows while it stays Initial through the
-        // supervisor's issuing phase. So for recon, also load Initial stages so
-        // those test rows show on the fill-next-stage page.
-        const isRecon = data.format_type === 'ReconcilationSheet';
-        if (status !== 'Initial' || isRecon) {
-          fetchPromises.push(
-            qcChecklistApi.listAnswersForStage(stageId).then((rows) => {
-              const byQuestion: Record<number, SavedAnswer> = {};
-              const testRows: TestRow[] = [];
-              for (const r of rows) {
-                if (r.stage_question_mapping_id != null) {
-                  byQuestion[r.stage_question_mapping_id] = {
-                    textbox_value: r.textbox_value || '',
-                    question_option_id: r.question_option_id,
-                    response_question_option_id: r.response_question_option_id,
-                    product_id: r.product_id,
-                    date_time: r.date_time ?? null,
-                    response_answer: r.response_answer || '',
-                    answer_total_vails: r.answer_total_vails ?? 0,
-                    helpers: r.helpers ?? [],
-                  };
-                  // question_answer_id -> sqm, so per-question approval mappings
-                  // (keyed by question_answer_id) can attach to the right row.
-                  qaToSqm[r.id] = r.stage_question_mapping_id;
-                } else if (r.test_title) {
-                  // Auto-generated per-test row (no stage_question_mapping):
-                  // its test_title acts as the row title, sample_vails its
-                  // sample description. Rendered as read-only grid rows.
-                  testRows.push({
-                    id: r.id,
-                    test_title: r.test_title,
-                    sample_vails: r.sample_vails || '',
-                    has_vails: r.has_vails,
-                    serial_number: r.serial_number,
-                    receiver_user_id: r.receiver_user_id ?? null,
-                    receiver_name: r.receiver_name || '',
-                    issuer_name: r.issuer_name || '',
-                    issued_by_date: r.issued_by_date ?? null,
-                    received_by_date: r.received_by_date ?? null,
-                    is_issued_vails: r.is_issued_vails ?? false,
-                  });
-                }
-              }
-              answersMap[fsm] = byQuestion;
-              if (testRows.length > 0) {
-                testRows.sort((a, b) => a.serial_number - b.serial_number);
-                testMap[fsm] = testRows;
-              }
-            })
-          );
-          // Saved sub-question answers, grouped by parent question_id.
-          fetchPromises.push(
-            qcChecklistApi.listSubAnswersForStage(stageId).then((groups) => {
-              const byParent: Record<number, SavedSubAnswer[]> = {};
-              for (const g of groups) {
-                byParent[g.parent_question_id] = g.sub_answers.map((s) => ({
-                  question_id: s.question_id,
-                  textbox_value: s.textbox_value || '',
-                  question_option_id: s.question_option_id,
-                  response_answer: s.response_answer || '',
-                }));
-              }
-              subAnswersMap[fsm] = byParent;
-            })
-          );
+        const byQuestion: Record<number, SavedAnswer> = {};
+        const testRows: TestRow[] = [];
+        for (const r of block.answers) {
+          if (r.stage_question_mapping_id != null) {
+            byQuestion[r.stage_question_mapping_id] = {
+              textbox_value: r.textbox_value || '',
+              question_option_id: r.question_option_id,
+              response_question_option_id: r.response_question_option_id,
+              product_id: r.product_id,
+              date_time: r.date_time ?? null,
+              response_answer: r.response_answer || '',
+              answer_total_vails: r.answer_total_vails ?? 0,
+              helpers: r.helpers ?? [],
+            };
+            // question_answer_id -> sqm, so per-question approval mappings
+            // (keyed by question_answer_id) can attach to the right row.
+            qaToSqm[r.id] = r.stage_question_mapping_id;
+          } else if (r.test_title) {
+            // Auto-generated per-test row (no stage_question_mapping): its
+            // test_title is the row title, sample_vails its sample description.
+            testRows.push({
+              id: r.id,
+              test_title: r.test_title,
+              sample_vails: r.sample_vails || '',
+              has_vails: r.has_vails,
+              serial_number: r.serial_number,
+              receiver_user_id: r.receiver_user_id ?? null,
+              receiver_name: r.receiver_name || '',
+              issuer_name: r.issuer_name || '',
+              issued_by_date: r.issued_by_date ?? null,
+              received_by_date: r.received_by_date ?? null,
+              is_issued_vails: r.is_issued_vails ?? false,
+            });
+          }
         }
+        answersMap[fsm] = byQuestion;
+        if (testRows.length > 0) {
+          testRows.sort((a, b) => a.serial_number - b.serial_number);
+          testMap[fsm] = testRows;
+        }
+
+        const byParent: Record<number, SavedSubAnswer[]> = {};
+        for (const g of block.sub_answers) {
+          byParent[g.parent_question_id] = g.sub_answers.map((s) => ({
+            question_id: s.question_id,
+            textbox_value: s.textbox_value || '',
+            question_option_id: s.question_option_id,
+            response_answer: s.response_answer || '',
+          }));
+        }
+        subAnswersMap[fsm] = byParent;
+
+        // Approval-label mappings for the stage (who acted on each label).
+        mappingsMap[fsm] = block.approval_mappings;
       }
-      await Promise.all(fetchPromises);
+
       setSavedAnswersByFsm(answersMap);
       setSavedSubAnswersByFsm(subAnswersMap);
       setApprovalMappingsByFsm(mappingsMap);
-      setQuestionApprovalMappings(questionApprovals);
+      setQuestionApprovalMappings(detail.question_approvals);
       setSqmByQuestionAnswerId(qaToSqm);
       setTestRowsByFsm(testMap);
 

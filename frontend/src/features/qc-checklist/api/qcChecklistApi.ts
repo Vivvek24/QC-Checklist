@@ -162,6 +162,37 @@ export interface QuestionApprovalInput {
   remark_text: string;
 }
 
+/** A persisted stage's identity + live status, from the request-detail
+ * aggregate (keyed by format_stage_mapping_id so it overlays the preview). */
+export interface StageStateResponse {
+  format_stage_mapping_id: number | null;
+  checklist_stage_id: number;
+  status: string;
+}
+
+/** All saved data for one stage, grouped under its format stage mapping — the
+ * per-stage block of the request-detail aggregate. */
+export interface StageAnswersBlockResponse {
+  format_stage_mapping_id: number | null;
+  checklist_stage_id: number;
+  answers: SavedAnswerResponse[];
+  sub_answers: ParentSubAnswersResponse[];
+  approval_mappings: ApprovalLabelMappingResponse[];
+}
+
+/** The full fill-page payload for one request, returned by the single
+ * request-detail endpoint — preview tree + per-stage statuses + all saved
+ * answers / sub-answers / approval mappings in one response. */
+export interface ChecklistRequestDetailResponse {
+  request_id: number;
+  request_number: string;
+  format_id: number;
+  preview: ChecklistPreview;
+  stages: StageStateResponse[];
+  answer_blocks: StageAnswersBlockResponse[];
+  question_approvals: ApprovalLabelMappingResponse[];
+}
+
 export const qcChecklistApi = {
   /** The full format -> stages -> sections -> questions tree for a format,
    * used as the rows for the checklist form. */
@@ -169,6 +200,18 @@ export const qcChecklistApi = {
     const { data } = await apiClient.get<ChecklistPreview>('/qc-checklist/preview', {
       params: { format_id: formatId },
     });
+    return data;
+  },
+
+  /** The full fill-page payload for an existing request in ONE call: the format
+   * preview tree, each stage's live status, and every stage's saved answers /
+   * sub-answers / approval mappings. Replaces the previous per-stage fan-out
+   * (preview + stages + 3 calls per stage). Backed by
+   * GET /qc-checklist/requests/{request_number}/detail. */
+  getRequestDetail: async (requestNumber: string): Promise<ChecklistRequestDetailResponse> => {
+    const { data } = await apiClient.get<ChecklistRequestDetailResponse>(
+      `/qc-checklist/requests/${encodeURIComponent(requestNumber)}/detail`
+    );
     return data;
   },
 

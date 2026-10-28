@@ -31,6 +31,7 @@ from src.api.v1.endpoints.masters.template_stage_save_controller import router a
 from src.api.v1.endpoints.masters.unit_controller import router as unit_router
 from src.api.v1.endpoints.masters.validation_type_controller import router as validation_type_router
 from src.api.v1.endpoints.qc_checklist.checklist_request_controller import router as checklist_request_router
+from src.api.v1.endpoints.qc_checklist.checklist_request_detail_controller import router as checklist_request_detail_router
 from src.api.v1.endpoints.qc_checklist.checklist_stage_controller import router as checklist_stage_router
 from src.api.v1.endpoints.qc_checklist.checklist_stage_section_controller import router as checklist_stage_section_router
 from src.api.v1.endpoints.qc_checklist.dashboard_controller import router as dashboard_router
@@ -81,6 +82,7 @@ api_v1_router.include_router(checklist_preview_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(validate_checklist_router)
 api_v1_router.include_router(submit_stage_router)
+api_v1_router.include_router(checklist_request_detail_router)
 api_v1_router.include_router(checklist_request_router)
 api_v1_router.include_router(checklist_stage_router)
 api_v1_router.include_router(checklist_stage_section_router)
